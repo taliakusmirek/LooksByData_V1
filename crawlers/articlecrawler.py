@@ -63,7 +63,6 @@ def crawl_page(url):
             # Add article URLs to the queue with higher priority
             elif re.match(r'^https?://', link) and 'article' in link:
                 url_queue.put((0, link))
-        logging.info(f"Crawled page: {url}")
 
 def extract_article_content(url, output_dir):
     # Get HTML content of the article
@@ -96,6 +95,7 @@ def extract_article_content(url, output_dir):
 
 # Function to scrape article content from a page
 def scrape_page(url):
+    numofarticles = 0
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -130,6 +130,7 @@ def scrape_page(url):
 
 
             logging.info(f"Scraped page: {url}")
+            numofarticles += 1
         else:
             logging.warning(f"No title found for page: {url}")
     else:
@@ -137,12 +138,14 @@ def scrape_page(url):
 
 # Function to download and resize images
 def download_and_resize_image(img_url, filename):
+    numofimages = 0
     try:
         response = requests.get(img_url)
         img = Image.open(BytesIO(response.content))
         img = img.resize((256, 256))  
         img.save(f'articleimages/{filename}.jpg')
         logging.info(f"Downloaded and resized image: {filename}")
+        numofimages += 1
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
 
@@ -214,17 +217,17 @@ def main():
 
     # Rank word frequencies and export them to a CSV file
     ranked_words = word_counter.most_common()
-    with open('fashion_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
+    with open('ranked_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(['Word', 'Frequency'])
         csv_writer.writerows(ranked_words)
 
-    logging.info("Data has been successfully exported to 'fashion_data.csv'.")
+    logging.info("Data has been successfully exported to 'fashion_data.csv' and 'ranked_data.csv'.")
+    logging.info("Number of images crawled: {numofimages}")
+    logging.info("Number of articles crawled: {numofarticles}")
 
 if __name__ == "__main__":
     main()
 
 
-# keep track of number of articles scraped
-# keep track of number of images
     #fix row labels of CSV
