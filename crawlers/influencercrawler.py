@@ -6,6 +6,7 @@ import random
 import re
 import requests
 from PIL import Image
+import time
 
 L = instaloader.Instaloader()
 
@@ -20,6 +21,12 @@ L.interactive_login(scrapeuser)
 
 # Words to filter out of results
 common_words = ["i", "the", "my", "to", "a", "and", "you", "in", "so", "for", "me", "of", "is", "it", "this", "with", "that", "be", "are", "its", "was", "on", "at", "from", "like", "all", "have", "if", "get", "we", "because", "dont", "as", "things", "people", "good", "best", "just", "one", "about", "an", "beautiful", "day", "thank", "last", "when", "new", "your", "what", "by"]
+
+# PRE-ESTABLISHED: words to scrape for, and users to scrape from
+luxury_brands = ["gucci", "chanel", "louisvuitton", "hermes", "prada", "dior", "versace", "fendi", "balenciaga", "valentino"]
+fashion_words = ["fashion", "style", "outfit", "trend", "clothing", "apparel", "designer", "luxury", "model", "runway", "vogue", "glamour", "trendy", "chic", "stylish", "couture", "accessories", "shopping", "wardrobe", "fashionista", "fashionable", "trendsetter", "fashionblogger", "fashionweek", "fashiondesigner", "fashionstyle", "fashionphotography", "fashionmodel", "fashioninspo", "fashiondaily", "fashionaddict", "fashionlover", "fashiongram", "fashionpost", "fashionforward", "fashiondiaries", "fashiongirl", "fashiontrends", "fashionlovers", "fashiondesign", "fashionphotographer", "fashionphotograph", "fashionphotographers", "fashionphotographs", "fashionphotographyappreciation", "fashionphotographyofficial", "fashionphotographyoftheday", "fashionphotographyworkshop", "fashionphotographyacademy", "fashionphotographyblog", "fashionphotographyeditorial", "fashionphotographyevents", "fashionphotographyinstitute", "fashionphotographyinspiration", "fashionphotographyinternational", "fashionphotographyislife", "fashionphotographylove", "fashionphotographyofinstagram", "fashionphotographyproject", "fashionphotographytips", "fashionphotographyworkshops", "fashionphotographyworld", "fashionphotographyworkshop", "fashionphotographyworkshops", "fashionphotographyacademy", "fashionphotographyblog", "fashionphotographyeditorial", "fashionphotographyevents", "fashionphotographyinstitute", "fashionphotographyinspiration", "fashionphotographyinternational", "fashionphotographyislife", "fashionphotographylove", "fashionphotographyofinstagram", "fashionphotographyproject", "fashionphotographytips", "fashionphotographyworkshops", "fashionphotographyworld", "fashionphotographyworkshop", "fashionphotographyworkshops", "fashionphotographyacademy", "fashionphotographyblog", "fashionphotographyeditorial", "fashionphotographyevents", "fashionphotographyislife", "fashionphotographylove", "fashionphotographyofinstagram", "fashionphotographyproject", "fashionphotographytips", "fashionphotographyworkshops", "fashionphotographyworld", "fashionphotographyworkshop", "fashionphotographyworkshops", "fashionphotographyacademy", "fashionphotographyblog", "fashionphotographyeditorial", "fashionphotographyevents", "fashionphotographyinstitute", "fashionphotographyinspiration", "fashionphotographyinternational", "fashionphotographyislife", "fashionphotographylove", "fashionphotographyofinstagram", "fashionphotographyproject", "fashionphotographytips", "fashionphotographyworkshops", "fashionphotographyworld", "fashionphotographyworkshop", "fashionphotographyworkshops", "fashionphotographyacademy", "fashionphotographyblog", "fashionphotographyeditorial", "fashionphotographyevents"]
+username = ["loewe", "aritzia", "jihoon", "matildadjerf", "ninaheatherlea", "christinaelezaj", "lydsbutler", "prettylittlething", "daisyherriott"]
+
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
@@ -52,6 +59,19 @@ def fetch_and_resize_images(posts, output_folder, target_size=(256, 256)):
         except Exception as e:
             print(f"Error fetching or resizing image: {e}")
 
+# Function to fetch posts containing specified keywords
+def fetch_posts_by_hashtags(hashtags, count=100):
+    posts = []
+    for hashtag in hashtags:
+        print(f"Fetching posts for hashtag: {hashtag}...")
+        for post in L.get_hashtag_posts(hashtag):
+            posts.append(post)
+            if len(posts) >= count:
+                break
+        if len(posts) >= count:
+            break
+    return posts
+
 
 # Extract fashion-related data from captions and hashtags
 def extract_fashion_data(posts):
@@ -64,21 +84,19 @@ def extract_fashion_data(posts):
             # Tokenize the text
             words = caption_text.split()
             words = [word for word in words if word not in common_words]
-            fashion_data.update(words)
+            # Filter posts that mention luxury brands or fashion-related words
+            if any(brand in caption_text for brand in luxury_brands) or any(word in caption_text for word in fashion_words):
+                fashion_data.update(words)
         # Extract hashtags
         hashtags = post.caption_hashtags
         if hashtags:
             hashtags = [hashtag for hashtag in hashtags if hashtag.lower() not in common_words]
-            fashion_data.update(hashtags)
+            # Filter posts that mention luxury brands or fashion-related words
+            if any(brand in hashtags for brand in luxury_brands) or any(word in hashtags for word in fashion_words):
+                fashion_data.update(hashtags)
         L.context.user_agent = random.choice(USER_AGENTS)
     return fashion_data
 
-# Add data to CSV, making sure to remove redundant common words and providing a column for influencers
-def append_to_csv(data, filename, influencer):
-    with open(filename, 'a', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        for word, frequency in data:
-            csv_writer.writerow([word, frequency, influencer])
 
 # Find the most overlapping words from each influencer's data
 def find_most_overlapping_words(input_filename, output_filename):
@@ -123,37 +141,44 @@ def find_most_overlapping_words(input_filename, output_filename):
 
 # Run it!
 def main():
-    usernames = ["jihoon", "matildadjerf", "ninaheatherlea", "christinaelezaj", "lydsbutler", "prettylittlething", "daisyherriott"]
-    input_filename = 'influencer_data.csv'
-    output_filename = 'influencer_finalcomparisons.csv'
-    output_folder = 'images'
+    input_filename = 'instagram_data.csv'
+    output_filename = 'influencer_comparisons.csv'
+    output_folder = 'instagram_images'
 
-    for username in usernames:
-        print("-" * 40)
-        print(f"Fetching data for user: {username}")
-        user_posts = fetch_user_posts(username)
+    hashtags_to_search = luxury_brands + fashion_words
+    posts = fetch_posts_by_hashtags(hashtags_to_search)
 
-        print("Extracting influencer-related data...")
-        fashion_data = extract_fashion_data(user_posts)
+    # Fetch posts with specified keywords and brands
+    for user in username:
+        print(f"Fetching posts from {user}...")
+        posts = fetch_user_posts(user)
+
+        print("Extracting fashion-related data...")
+        fashion_data = extract_fashion_data(posts)
 
         ranked_instagram = fashion_data.most_common()
 
         print("Appending data to CSV...")
-        append_to_csv(ranked_instagram, input_filename, username)
-
-
+        with open(input_filename, 'a', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            for word, frequency in ranked_instagram:
+                csv_writer.writerow([word, frequency])
+        
         print("Fetching and resizing images...")
-        fetch_and_resize_images(user_posts, output_folder)
-
+        fetch_and_resize_images(posts, output_folder)
 
         print("Data has been successfully extracted!")
         print("-" * 40)
-        time.sleep(15)
-    
+
+        # Add a random delay before fetching data from the next user
+        delay = random.randint(5, 35) 
+        print(f"Waiting for {delay} seconds...")
+        time.sleep(delay)
+
     print("Finding most overlapping words...")
     find_most_overlapping_words(input_filename, output_filename)
-    print("Most overlapping words saved to 'influencer_finalcomparisons.csv'")
-    print("Images saved to 'images' folder.")
+    print("Most overlapping words saved to 'instagram_ranked_words.csv'")
+    print("All images saved to 'instagram_images' folder.")
 
 if __name__ == "__main__":
     main()
@@ -163,6 +188,3 @@ if __name__ == "__main__":
 
 
 #matplotlib?
-    # alter to look at accounts with fashion in it and not limit to certain users? 
-    # base scrap ad crawl on HASHTAGS
-    # fix row labels of csv

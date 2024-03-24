@@ -11,6 +11,11 @@ import logging
 from PIL import Image
 from io import BytesIO
 import os
+import csv
+import os
+from PIL import Image
+from io import BytesIO
+
 
 
 # Words to filter out of CSV file later
@@ -64,7 +69,7 @@ def crawl_page(url):
             elif re.match(r'^https?://', link) and 'article' in link:
                 url_queue.put((0, link))
 
-def extract_article_content(url, output_dir):
+def extract_article_content(url, output_dir, article_title):
     # Get HTML content of the article
     html_content = get_html(url)
     if html_content:
@@ -81,21 +86,20 @@ def extract_article_content(url, output_dir):
             try:
                 response = requests.get(img_url)
                 img = Image.open(BytesIO(response.content))
-                img.save(f'{output_dir}/image_{idx}.jpg')
+                img.save(f'{output_dir}/{article_title}_image_{idx}.jpg')
             except Exception as e:
                 logging.error(f"Error downloading or saving image: {e}")
 
         # Save text content to a file
-        with open(f'{output_dir}/article_content.txt', 'w', encoding='utf-8') as file:
+        with open(f'{output_dir}/{article_title}_content.txt', 'w', encoding='utf-8') as file:
             file.write(text_content)
-        logging.info(f"Article content extracted and saved to {output_dir}/article_content.txt")
+        logging.info(f"Article content extracted and saved to {output_dir}/{article_title}_content.txt")
     else:
         logging.error(f"Failed to fetch HTML from {url}")
 
 
 # Function to scrape article content from a page
 def scrape_page(url):
-    numofarticles = 0
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -118,16 +122,16 @@ def scrape_page(url):
                     csv_writer = csv.writer(csvfile)
                     csv_writer.writerow([article_name, url])
 
-                images = soup.find_all('img')
-                for idx, img in enumerate(images):
-                    img_url = img.get('src')
-                    download_and_resize_image(img_url, f'{idx}_{article_name}')
-                
                 # Extract and save article content for AI model training
                 output_dir = f'training/{article_name}'  
                 os.makedirs(output_dir, exist_ok=True)  
-                extract_article_content(url, output_dir)
+                extract_article_content(url, output_dir, article_name)
 
+                # Extract and save images
+                images = soup.find_all('img')
+                for idx, img in enumerate(images):
+                    img_url = img.get('src')
+                    download_and_resize_image(img_url, f'{article_name}_{idx}')
 
             logging.info(f"Scraped page: {url}")
             numofarticles += 1
@@ -138,13 +142,11 @@ def scrape_page(url):
 
 # Function to download and resize images
 def download_and_resize_image(img_url, filename):
-    numofimages = 0
     try:
         response = requests.get(img_url)
         img = Image.open(BytesIO(response.content))
         img = img.resize((256, 256))  
         img.save(f'articleimages/{filename}.jpg')
-        logging.info(f"Downloaded and resized image: {filename}")
         numofimages += 1
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
@@ -202,6 +204,9 @@ def main():
 
     ]
 
+    numofimages = 0
+    numofarticles = 0
+
     # Add start URLs to the queue
     for url in start_urls:
         url_queue.put((0, url))
@@ -225,12 +230,10 @@ def main():
         csv_writer.writerow(['Word', 'Frequency'])
         csv_writer.writerows(ranked_words)
 
-    logging.info("Data has been successfully exported to 'fashion_data.csv' and 'ranked_data.csv'.")
-    logging.info("Number of images crawled: {numofimages}")
-    logging.info("Number of articles crawled: {numofarticles}")
+    logging.info("Data has been successfully exported to their respective csv. files!")
+    logging.info(f"Number of images crawled: {numofimages}")
+    logging.info(f"Number of articles crawled: {numofarticles}")
 
 if __name__ == "__main__":
     main()
 
-
-    #fix row labels of CSV
