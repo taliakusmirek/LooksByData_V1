@@ -10,9 +10,9 @@ import time
 
 L = instaloader.Instaloader()
 
-# Pre-define the Instagram account to use for scraping in the variable below
-scrapeuser = "taliadouceur"
-#PW: Elizabeth2006@
+# Pre-define the Instagram account to use for scraping and crawling in the variable below
+scrapeuser = "???"
+#PW: Elizabeth22@
 
 
 

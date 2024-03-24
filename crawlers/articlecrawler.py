@@ -17,7 +17,6 @@ from PIL import Image
 from io import BytesIO
 
 
-
 # Words to filter out of CSV file later
 common_words = set([
     "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc"
@@ -100,6 +99,10 @@ def extract_article_content(url, output_dir, article_title):
 
 # Function to scrape article content from a page
 def scrape_page(url):
+
+    global numofarticles
+    global numofimages
+
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -118,7 +121,7 @@ def scrape_page(url):
                 word_counter.update(words)
                 # Write article name and link to CSV
                 article_name = title_tags[0].get_text()
-                with open('fashion_data.csv', 'a', newline='') as csvfile:
+                with open('articles.csv', 'a', newline='') as csvfile:
                     csv_writer = csv.writer(csvfile)
                     csv_writer.writerow([article_name, url])
 
@@ -173,6 +176,7 @@ def process_queue():
 
 # Run it!
 def main():
+
     # Set up logging
     logging.basicConfig(level=logging.INFO)
 
@@ -203,9 +207,6 @@ def main():
         "https://www.ssense.com/en-us/women"
 
     ]
-
-    numofimages = 0
-    numofarticles = 0
 
     # Add start URLs to the queue
     for url in start_urls:
