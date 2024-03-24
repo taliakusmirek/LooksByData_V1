@@ -197,6 +197,9 @@ def main():
         "https://www.brownsfashion.com/woman/stories/fashion",
         "https://www.saksfifthavenue.com/?orgin=%2Feditorial",
         "https://www.neimanmarcus.com/editorial",
+        "https://www.ssense.com/en-us/women?sort=popularity-desc",
+        "https://www.ssense.com/en-us/women"
+
     ]
 
     # Add start URLs to the queue
