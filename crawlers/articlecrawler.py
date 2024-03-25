@@ -88,6 +88,7 @@ def extract_article_content(url, output_dir, article_title):
 
 # Function to scrape article content from a page and its subpages
 def scrape_page(url):
+    time.sleep(random.uniform(5, 10))
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -133,17 +134,22 @@ def scrape_page(url):
     else:
         logging.error(f"Failed to scrape page: {url}")
 
-# Function to download and resize images
+# Function to download and resize images, accounting for different format types
 def download_and_resize_image(img_url, filename):
     try:
         if img_url.startswith('//'):
             img_url = 'https:' + img_url
+        elif img_url.startswith('data:image'):
+            return  # Skip data URLs
         response = requests.get(img_url)
-        img = Image.open(BytesIO(response.content))
-        if img.mode == 'RGBA':
-            img = img.convert('RGB')
-        img = img.resize((256, 256))
-        img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=90)
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+            img = img.resize((256, 256))
+            img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=90)
+        else:
+            logging.error(f"Failed to download image from {img_url}. Status code: {response.status_code}")
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
 
@@ -158,7 +164,7 @@ def process_queue():
         else:  # Low priority (pagination pages)
             crawl_page(url)
         url_queue.task_done()
-        time.sleep(random.uniform(1, 3))  
+        time.sleep(random.uniform(14, 30))  
 
 
 
@@ -229,6 +235,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-
-# make able to go onto the sub articles of the links provided, not just the main pages
