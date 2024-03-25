@@ -222,3 +222,6 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+
+# make able to go onto the sub articles of the links provided, not just the main pages
