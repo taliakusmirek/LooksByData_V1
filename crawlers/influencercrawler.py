@@ -172,7 +172,7 @@ def main():
 
         # Add a random delay before fetching data from the next user
         delay = random.randint(15, 135) 
-        print(f"Waiting for {delay} seconds...")
+        print(f"Waiting for {delay} seconds...please stand by!")
         time.sleep(delay)
 
     print("Finding most overlapping words...")
