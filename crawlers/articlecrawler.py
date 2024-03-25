@@ -100,9 +100,6 @@ def extract_article_content(url, output_dir, article_title):
 # Function to scrape article content from a page
 def scrape_page(url):
 
-    global numofarticles
-    global numofimages
-
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -137,7 +134,6 @@ def scrape_page(url):
                     download_and_resize_image(img_url, f'{article_name}_{idx}')
 
             logging.info(f"Scraped page: {url}")
-            numofarticles += 1
         else:
             logging.warning(f"No title found for page: {url}")
     else:
@@ -150,7 +146,6 @@ def download_and_resize_image(img_url, filename):
         img = Image.open(BytesIO(response.content))
         img = img.resize((256, 256))  
         img.save(f'articleimages/{filename}.jpg')
-        numofimages += 1
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
 
@@ -232,8 +227,6 @@ def main():
         csv_writer.writerows(ranked_words)
 
     logging.info("Data has been successfully exported to their respective csv. files!")
-    logging.info(f"Number of images crawled: {numofimages}")
-    logging.info(f"Number of articles crawled: {numofarticles}")
 
 if __name__ == "__main__":
     main()
