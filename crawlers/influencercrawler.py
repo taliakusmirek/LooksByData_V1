@@ -11,8 +11,8 @@ import time
 L = instaloader.Instaloader()
 
 # Pre-define the Instagram account to use for scraping and crawling in the variable below
-scrapeuser = "???"
-#PW: Elizabeth22@
+scrapeuser = "outfitsiq"
+#PW: walldrum
 
 
 
@@ -177,7 +177,7 @@ def main():
 
     print("Finding most overlapping words...")
     find_most_overlapping_words(input_filename, output_filename)
-    print("Most overlapping words saved to 'instagram_ranked_words.csv'")
+    print("Ranked words saved to 'instagram_ranked_words.csv'")
     print("All images saved to 'instagram_images' folder.")
 
 if __name__ == "__main__":
