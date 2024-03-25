@@ -86,17 +86,15 @@ def extract_article_content(url, output_dir, article_title):
         logging.error(f"Failed to fetch HTML from {url}")
 
 
-# Function to scrape article content from a page
+# Function to scrape article content from a page and its subpages
 def scrape_page(url):
-
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
         title_tags = soup.find_all(['h1', 'h2', 'h3','a'])
         if title_tags:
             title = title_tags[0].get_text().lower()
-            # Check if any keyword is present in the title
-            #if any(keyword in title for keyword in keywords):
+            
             # Extract text content from article
             text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span']))
             # Clean the text
@@ -125,18 +123,27 @@ def scrape_page(url):
             logging.info(f"Scraped page: {url}")
         else:
             logging.warning(f"No title found for page: {url}")
+
+        # Find all links on the page and scrape subpages
+        links = [link.get('href') for link in soup.find_all('a', href=True)]
+        for link in links:
+            if re.match(r'^https?://', link) and 'article' in link:
+                scrape_page(link)
+
     else:
         logging.error(f"Failed to scrape page: {url}")
 
 # Function to download and resize images
 def download_and_resize_image(img_url, filename):
     try:
+        if img_url.startswith('//'):
+            img_url = 'https:' + img_url
         response = requests.get(img_url)
         img = Image.open(BytesIO(response.content))
         if img.mode == 'RGBA':
             img = img.convert('RGB')
-        img = img.resize((256, 256))  
-        img.save(f'articleimages/{filename}.jpg', 'JPEG')
+        img = img.resize((256, 256))
+        img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=90)
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
 
@@ -180,7 +187,7 @@ def main():
         "https://blog.nastygal.com/style/page/2/",
         "https://www.ssense.com/en-us/editorial/fashion",
         "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
-        "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=1180001",
+        "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
         "https://www.freepeople.com/free-people-blog/",
         "https://www.anthropologie.com/stories-style",
         "https://www.madewell.com/Inspo.html",
