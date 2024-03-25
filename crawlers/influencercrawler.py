@@ -171,7 +171,7 @@ def main():
         print("-" * 40)
 
         # Add a random delay before fetching data from the next user
-        delay = random.randint(5, 35) 
+        delay = random.randint(15, 135) 
         print(f"Waiting for {delay} seconds...")
         time.sleep(delay)
 
@@ -187,4 +187,3 @@ if __name__ == "__main__":
 
 
 
-#matplotlib?

@@ -15,6 +15,7 @@ import csv
 import os
 from PIL import Image
 from io import BytesIO
+from urllib.parse import urlparse
 
 
 # Words to filter out of CSV file later
@@ -137,8 +138,15 @@ def scrape_page(url):
 # Function to download and resize images, accounting for different format types
 def download_and_resize_image(img_url, filename):
     try:
-        if img_url.startswith('//'):
-            img_url = 'https:' + img_url
+        if not img_url:
+            logging.error("Empty image URL provided.")
+            return
+        parsed_url = urlparse(img_url)
+        if not parsed_url.scheme:
+            logging.error(f"Invalid image URL: {img_url}")
+            return
+        if img_url.startswith('/'):
+            img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
         elif img_url.startswith('data:image'):
             return  # Skip data URLs
         response = requests.get(img_url)
@@ -147,7 +155,7 @@ def download_and_resize_image(img_url, filename):
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
             img = img.resize((256, 256))
-            img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=90)
+            img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=95)
         else:
             logging.error(f"Failed to download image from {img_url}. Status code: {response.status_code}")
     except Exception as e:
@@ -194,7 +202,6 @@ def main():
         "https://www.ssense.com/en-us/editorial/fashion",
         "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
         "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
-        "https://www.freepeople.com/free-people-blog/",
         "https://www.anthropologie.com/stories-style",
         "https://www.madewell.com/Inspo.html",
         "https://www.farfetch.com/style-guide/",
