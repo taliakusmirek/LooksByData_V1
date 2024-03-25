@@ -19,16 +19,16 @@ from io import BytesIO
 
 # Words to filter out of CSV file later
 common_words = set([
-    "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc"
+    "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc", "by"
 ])
 
-# Words to find articles
+# Words to find articles if not in title
 keywords = [
     "dress", "wear", "look", "moments", "style", "celebrity", "celebrity style", "photos", "show", "shows",
     "era", "trend", "wears", "jewelry", "season", "couture", "after-party", "girl", "women", "spring", "summer",
     "fall", "winter", "shoe", "swimwear", "bag", "report", "week", "fashion week", "edit", "she", "lookbook", 
     "Fall", "Summer", "Spring", "Winter", "wardrobe", "outfit", "styles", "outfits", "idea", "cute", "wore", 
-    "weather", "best", "fits", "shop", "new", "How to", "cuter", "worth", "need", "needed", "these", "love", "happy", "guide","studio","brand","brands","clothing"
+    "weather", "best", "fits", "shop", "Shop", "Jewelry", "jewelry", "Style", "Women", "Women's", "Fashion Week","new", "How to", "cuter", "worth", "need", "needed", "these", "love", "happy", "guide","studio","brand","brands","clothing"
 ]
 
 # Initialize a Counter object to count word frequencies
@@ -78,17 +78,6 @@ def extract_article_content(url, output_dir, article_title):
         for tag in soup.find_all(['p', 'span']):
             text_content += tag.get_text() + "\n"
 
-        # Extract and save images
-        images = soup.find_all('img')
-        for idx, img in enumerate(images):
-            img_url = img.get('src')
-            try:
-                response = requests.get(img_url)
-                img = Image.open(BytesIO(response.content))
-                img.save(f'{output_dir}/{article_title}_image_{idx}.jpg')
-            except Exception as e:
-                logging.error(f"Error downloading or saving image: {e}")
-
         # Save text content to a file
         with open(f'{output_dir}/{article_title}_content.txt', 'w', encoding='utf-8') as file:
             file.write(text_content)
@@ -107,31 +96,31 @@ def scrape_page(url):
         if title_tags:
             title = title_tags[0].get_text().lower()
             # Check if any keyword is present in the title
-            if any(keyword in title for keyword in keywords):
-                # Extract text content from article
-                text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span']))
-                # Clean the text
-                cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
-                # Tokenize the text
-                words = cleaned_text.split()
-                words = [word for word in words if word not in common_words]
-                word_counter.update(words)
-                # Write article name and link to CSV
-                article_name = title_tags[0].get_text()
-                with open('articles.csv', 'a', newline='') as csvfile:
-                    csv_writer = csv.writer(csvfile)
-                    csv_writer.writerow([article_name, url])
+            #if any(keyword in title for keyword in keywords):
+            # Extract text content from article
+            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span']))
+            # Clean the text
+            cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
+            # Tokenize the text
+            words = cleaned_text.split()
+            words = [word for word in words if word not in common_words]
+            word_counter.update(words)
+            # Write article name and link to CSV
+            article_name = title_tags[0].get_text()
+            with open('articles.csv', 'a', newline='') as csvfile:
+                csv_writer = csv.writer(csvfile)
+                csv_writer.writerow([article_name, url])
 
-                # Extract and save article content for AI model training
-                output_dir = f'training/{article_name}'  
-                os.makedirs(output_dir, exist_ok=True)  
-                extract_article_content(url, output_dir, article_name)
+            # Extract and save full article text for AI model training
+            output_dir = f'articletext/{article_name}'  
+            os.makedirs(output_dir, exist_ok=True)  
+            extract_article_content(url, output_dir, article_name)
 
-                # Extract and save images
-                images = soup.find_all('img')
-                for idx, img in enumerate(images):
-                    img_url = img.get('src')
-                    download_and_resize_image(img_url, f'{article_name}_{idx}')
+            # Extract and save images
+            images = soup.find_all('img')
+            for idx, img in enumerate(images):
+                img_url = img.get('src')
+                download_and_resize_image(img_url, f'{article_name}_{idx}')
 
             logging.info(f"Scraped page: {url}")
         else:
@@ -144,8 +133,10 @@ def download_and_resize_image(img_url, filename):
     try:
         response = requests.get(img_url)
         img = Image.open(BytesIO(response.content))
+        if img.mode == 'RGBA':
+            img = img.convert('RGB')
         img = img.resize((256, 256))  
-        img.save(f'articleimages/{filename}.jpg')
+        img.save(f'articleimages/{filename}.jpg', 'JPEG')
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
 
