@@ -8,6 +8,20 @@ import requests
 from PIL import Image
 import time
 
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "sagemaker.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+
 L = instaloader.Instaloader()
 
 # Pre-define the Instagram account to use for scraping and crawling in the variable below

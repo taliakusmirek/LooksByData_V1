@@ -17,6 +17,19 @@ from PIL import Image
 from io import BytesIO
 from urllib.parse import urlparse
 
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "",
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "sagemaker.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
 
 # Words to filter out of CSV file later
 common_words = set([
@@ -210,7 +223,8 @@ def main():
         "https://www.saksfifthavenue.com/?orgin=%2Feditorial",
         "https://www.neimanmarcus.com/editorial",
         "https://www.ssense.com/en-us/women?sort=popularity-desc",
-        "https://www.ssense.com/en-us/women"
+        "https://www.ssense.com/en-us/women",
+        "https://www.abercrombie.com/shop/us/womens-new-arrivals"
 
     ]
 
