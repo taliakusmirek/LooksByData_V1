@@ -1,6 +1,6 @@
 1. gain data on sites specified and their subpages/urls
 2. train AI to be able to look at the images currently shown on the sites RIGHT NOW and the keywords seen and rank keywords
-3. make conclusions on current trends based on what is currently popular and reccomend in words the specific types of items to wear to be in style
+3. make conclusions on current trends based on what is currently popular and what will be popular (predict) and reccomend in words the specific types of items to wear to be in style
 
 
 

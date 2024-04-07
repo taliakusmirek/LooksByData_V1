@@ -224,7 +224,9 @@ def main():
         "https://www.neimanmarcus.com/editorial",
         "https://www.ssense.com/en-us/women?sort=popularity-desc",
         "https://www.ssense.com/en-us/women",
-        "https://www.abercrombie.com/shop/us/womens-new-arrivals"
+        "https://www.abercrombie.com/shop/us/womens-new-arrivals",
+        "https://shop.mango.com/us/women/featured/whats-new_d55927954?utm_source=c-producto-destacados&utm_medium=email&utm_content=woman&utm_campaign=E_WSWEOP24&sfmc_id=339434986&cjext=768854443022715810",
+        "https://www2.hm.com/en_us/women/seasonal-trending/romance.html",
 
     ]
 
