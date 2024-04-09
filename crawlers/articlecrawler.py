@@ -86,7 +86,7 @@ def get_html(url):
         logging.error(f"Error occurred while fetching HTML from {url}: {e}")
         return None
 
-# Function to crawl a fashion page and discover articles 
+# Function to crawl a page and find links to scrape
 def crawl_page(url):
     if url.startswith('/'):
         url = f"https:/{url}"
@@ -104,8 +104,8 @@ def crawl_page(url):
             elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords):
                 url_queue.put((2, link)) 
 
+# Get HTML content of the article and save it to a text file
 def extract_article_content(url, output_dir, article_title):
-    # Get HTML content of the article
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -122,7 +122,6 @@ def extract_article_content(url, output_dir, article_title):
         
     else:
         logging.error(f"Failed to fetch HTML from {url}")
-        pass
 
 
 # Function to scrape article content from a page and its subpages
@@ -163,7 +162,6 @@ def scrape_page(url):
             logging.info(f"Scraped page: {url}")
         else:
             logging.warning(f"No title found for page: {url}")
-            pass
 
         # Find all links on the page and scrape subpages
         links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6', 'span'], {'href': True})]
@@ -176,7 +174,6 @@ def scrape_page(url):
 
     else:
         logging.error(f"Failed to scrape page: {url}")
-        pass
 
 # Function to download and resize images, accounting for different format types
 def download_and_resize_image(img_url, filename):
@@ -218,7 +215,6 @@ def download_and_resize_image(img_url, filename):
             logging.error(f"Failed to download image from {img_url}. Status code: {response.status_code}")
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
-        pass
 
 
 
@@ -226,12 +222,12 @@ def download_and_resize_image(img_url, filename):
 def process_queue():
     while True:
         priority, url = url_queue.get()
-        if priority == 0:  # High priority (article URLs)
+        if priority == 0:  # High priority 
             scrape_page(url)
-        else:  # Low priority (pagination pages)
+        else:  # Low priority
             crawl_page(url)
         url_queue.task_done()
-        time.sleep(random.uniform(4, 14))  
+        time.sleep(random.uniform(3, 15))  
 
 
 
@@ -253,7 +249,7 @@ def main():
 
     # Start URLs for crawling
     start_urls = [
-        "https://www.aritzia.com/en/clothing",
+        "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html"
     ]
 
     # Add start URLs to the queue
