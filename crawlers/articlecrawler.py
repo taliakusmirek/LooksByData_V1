@@ -18,7 +18,7 @@ from io import BytesIO
 from urllib.parse import urlparse
 import boto3
 from dotenv import load_dotenv
-
+from urllib.parse import urljoin
 
 {
     "Version": "2012-10-17",
@@ -96,11 +96,13 @@ def crawl_page(url):
         # Find all links on the page
         links = [link.get('href') for link in soup.find_all('a', href=True)]
         for link in links:
-            # Add pagination pages to the queue with higher priority
-            if re.match(r'^https?://', link) and ('page=' in link):
-                url_queue.put((1, link))
-            elif re.match(r'^/', link) and any(keyword in link.lower() for keyword in keywords):
+            if re.match(r'^https?://', link) and ('page=' in link):  
                 url_queue.put((0, link))
+            elif re.match(r'^/', link):  
+                full_url = urljoin(url, link)
+                url_queue.put((1, full_url))  
+            elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords):
+                url_queue.put((2, link)) 
 
 def extract_article_content(url, output_dir, article_title):
     # Get HTML content of the article
@@ -120,6 +122,7 @@ def extract_article_content(url, output_dir, article_title):
         
     else:
         logging.error(f"Failed to fetch HTML from {url}")
+        pass
 
 
 # Function to scrape article content from a page and its subpages
@@ -160,6 +163,7 @@ def scrape_page(url):
             logging.info(f"Scraped page: {url}")
         else:
             logging.warning(f"No title found for page: {url}")
+            pass
 
         # Find all links on the page and scrape subpages
         links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6', 'span'], {'href': True})]
@@ -172,6 +176,7 @@ def scrape_page(url):
 
     else:
         logging.error(f"Failed to scrape page: {url}")
+        pass
 
 # Function to download and resize images, accounting for different format types
 def download_and_resize_image(img_url, filename):
@@ -213,6 +218,7 @@ def download_and_resize_image(img_url, filename):
             logging.error(f"Failed to download image from {img_url}. Status code: {response.status_code}")
     except Exception as e:
         logging.error(f"Error downloading or resizing image: {e}")
+        pass
 
 
 
@@ -225,7 +231,7 @@ def process_queue():
         else:  # Low priority (pagination pages)
             crawl_page(url)
         url_queue.task_done()
-        time.sleep(random.uniform(14, 30))  
+        time.sleep(random.uniform(4, 14))  
 
 
 
