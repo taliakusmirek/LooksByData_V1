@@ -50,7 +50,9 @@ from dotenv import load_dotenv
 
 # Values to filter out of CSV ranking file later
 common_words = set([
-    "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc", "by", '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'
+    word for word in (set([
+        "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc", "by"
+    ])) if not word.isdigit()  # Get rid of any digits (usually the price)
 ])
 
 # Words to find articles if not in title
@@ -92,12 +94,12 @@ def crawl_page(url):
         # Find all links on the page
         links = [link.get('href') for link in soup.find_all('a', href=True)]
         for link in links:
-            # Add pagination pages to the queue with lower priority
-            if re.match(r'^https?://', link) and 'page=' in link:
-                url_queue.put((1, link))
-            # Add article URLs to the queue with higher priority
-            elif re.match(r'^https?://', link) and 'article' in link:
+            # Add pagination pages to the queue with higher priority
+            if re.match(r'^https?://', link) and ('page=' in link):
                 url_queue.put((0, link))
+            # Add article URLs to the queue with lower priority
+            elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords):
+                url_queue.put((1, link))
 
 def extract_article_content(url, output_dir, article_title):
     # Get HTML content of the article
@@ -114,6 +116,7 @@ def extract_article_content(url, output_dir, article_title):
         with open(f'{output_dir}/{file_name}_content.txt', 'w', encoding='utf-8') as file:
             file.write(text_content)
         logging.info(f"Article content extracted and saved to {output_dir}/{file_name}_content.txt")
+        
     else:
         logging.error(f"Failed to fetch HTML from {url}")
 
@@ -158,12 +161,13 @@ def scrape_page(url):
             logging.warning(f"No title found for page: {url}")
 
         # Find all links on the page and scrape subpages
-
-        # fix so subpages of that are links in h3 or h6 of divs are scraped
-        links = [link.get('href') for link in soup.find_all('a' 'h3', 'h6', 'div', href=True)]
+        links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6', 'span'], {'href': True})]
         for link in links:
-            if re.match(r'^https?://', link) and 'article' in link:
-                scrape_page(link)
+            if re.match(r'^https?://', link):
+                url_queue.put((1, link))  # Add subpage to the queue with higher priority
+
+        logging.info(f"Scraped page: {url}")
+        
 
     else:
         logging.error(f"Failed to scrape page: {url}")
@@ -176,7 +180,7 @@ def download_and_resize_image(img_url, filename):
             return
         parsed_url = urlparse(img_url)
         if img_url.startswith('/'):
-            img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
+            img_url = f"{parsed_url.scheme}:{img_url}"
         if img_url.startswith('//'):
             img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
         if img_url.startswith('://'):
@@ -187,6 +191,11 @@ def download_and_resize_image(img_url, filename):
         # Aritzia is so picky!
         if img_url.startswith('aritzia.scene7.com'):
             img_url = f"https://{img_url}" 
+
+        # H&M is so picky!
+        if img_url.startswith('lp2.hm.com'):
+            img_url = f"https://{img_url}" 
+
 
 
         response = requests.get(img_url)
@@ -238,7 +247,6 @@ def main():
     # Start URLs for crawling
     start_urls = [
         "https://www.aritzia.com/en/clothing",
-        "https://www2.hm.com/en_us/women/seasonal-trending/romance.html"
     ]
 
     # Add start URLs to the queue
@@ -267,29 +275,38 @@ def main():
 
     logging.info("All data has been successfully exported to their respective csv. files!")
 
-    #try:
+    try:
         # Upload files to S3 bucket
-        #s3 = boto3.client(
-            #'s3', 
-            #aws_access_key_id=ACCESS_KEY,
-            #aws_secret_access_key=SECRET_KEY,
-        #)
+        s3 = boto3.client(
+            's3', 
+            aws_access_key_id=ACCESS_KEY,
+            aws_secret_access_key=SECRET_KEY,
+        )
         #s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
         #s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
         
-        #for file in os.listdir('articletext'):
-            #s3.upload_file('articletext', 'gaineddata', file)
-        
-        #for file in os.listdir('articleimages'):
-            #s3.upload_file('articleimages', 'gaineddata/images/', file)
+        for filename in os.listdir('articletext'):
+            file_path = os.path.join('articletext', filename)  
+            s3.upload_file(file_path, 'gaineddata', filename) 
 
-        #logging.info("Files have been uploaded to S3!")
-    #except Exception as e:
-        #logging.error(f"Error occurred while uploading files to S3: {e}")
+        for filename in os.listdir('articleimages'):
+            file_path = os.path.join('articleimages', filename)
+            s3.upload_file(file_path, 'gaineddata/images/', filename)
+
+
+        logging.info("Files have been uploaded to S3!")
+    except Exception as e:
+        logging.error(f"Error occurred while uploading files to S3: {e}")
 
 
 if __name__ == "__main__":
     main()
 
+
+
+
+
+
+# make sure to scrape on a jupyter server and not on a local machine
 
 # eventually put a crawler into it from aws to analyze data
