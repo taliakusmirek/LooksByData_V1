@@ -88,6 +88,8 @@ def get_html(url):
 
 # Function to crawl a fashion page and discover articles 
 def crawl_page(url):
+    if url.startswith('/'):
+        url = f"https:/{url}"
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -96,10 +98,9 @@ def crawl_page(url):
         for link in links:
             # Add pagination pages to the queue with higher priority
             if re.match(r'^https?://', link) and ('page=' in link):
-                url_queue.put((0, link))
-            # Add article URLs to the queue with lower priority
-            elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords):
                 url_queue.put((1, link))
+            elif re.match(r'^/', link) and any(keyword in link.lower() for keyword in keywords):
+                url_queue.put((0, link))
 
 def extract_article_content(url, output_dir, article_title):
     # Get HTML content of the article
@@ -167,7 +168,7 @@ def scrape_page(url):
                 url_queue.put((1, link))  # Add subpage to the queue with higher priority
 
         logging.info(f"Scraped page: {url}")
-        
+
 
     else:
         logging.error(f"Failed to scrape page: {url}")
