@@ -48,9 +48,9 @@ from dotenv import load_dotenv
 }
 
 
-# Words to filter out of CSV file later
+# Values to filter out of CSV ranking file later
 common_words = set([
-    "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc", "by"
+    "i", "and", "the", "my", "to", "a", "you", "me", "in", "so", "for", "etc", "by", '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'
 ])
 
 # Words to find articles if not in title
@@ -106,13 +106,14 @@ def extract_article_content(url, output_dir, article_title):
         soup = BeautifulSoup(html_content, "html.parser")
         # Extract text content from article
         text_content = ""
-        for tag in soup.find_all('p', 'span', 'alt', 'title'):
+        for tag in soup.find_all(['p', 'span', 'alt', 'title']):
             text_content += tag.get_text() + "\n"
 
         # Save text content to a file
-        with open(f'{output_dir}/{article_title}_content.txt', 'w', encoding='utf-8') as file:
+        file_name = article_title.replace('/', '_')  # Replace '/' in article title with '_'
+        with open(f'{output_dir}/{file_name}_content.txt', 'w', encoding='utf-8') as file:
             file.write(text_content)
-        logging.info(f"Article content extracted and saved to {output_dir}/{article_title}_content.txt")
+        logging.info(f"Article content extracted and saved to {output_dir}/{file_name}_content.txt")
     else:
         logging.error(f"Failed to fetch HTML from {url}")
 
@@ -123,26 +124,26 @@ def scrape_page(url):
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
-        title_tags = soup.find_all(['h1', 'h2', 'h3','a', 'div'])
+        title_tags = soup.find_all(['h1', 'h2', 'h3','a'])
         if title_tags:
             title = title_tags[0].get_text().lower()
             
             # Extract text content from article
-            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span', 'alt', 'title']))
+            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span', 'alt', 'title', 'class', 'h1', 'h2', 'h3']))
             # Clean the text
             cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
             # Tokenize the text
             words = cleaned_text.split()
             words = [word for word in words if word not in common_words]
             word_counter.update(words)
-            # Write article name and link to CSV
+            # Write article name and link to CSV to store URLS
             article_name = title_tags[0].get_text()
             with open('articles.csv', 'a', newline='') as csvfile:
                 csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([article_name, url])
+                csv_writer.writerow([url])
 
             # Extract and save full article text for AI model training
-            output_dir = f'articletext/{article_name}'  
+            output_dir = f'articletext'  
             os.makedirs(output_dir, exist_ok=True)  
             extract_article_content(url, output_dir, article_name)
 
@@ -157,7 +158,9 @@ def scrape_page(url):
             logging.warning(f"No title found for page: {url}")
 
         # Find all links on the page and scrape subpages
-        links = [link.get('href') for link in soup.find_all('a', href=True)]
+
+        # fix so subpages of that are links in h3 or h6 of divs are scraped
+        links = [link.get('href') for link in soup.find_all('a' 'h3', 'h6', 'div', href=True)]
         for link in links:
             if re.match(r'^https?://', link) and 'article' in link:
                 scrape_page(link)
@@ -174,15 +177,26 @@ def download_and_resize_image(img_url, filename):
         parsed_url = urlparse(img_url)
         if img_url.startswith('/'):
             img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
-        elif img_url.startswith('data:image'):
-            return  # Skip data URLs
+        if img_url.startswith('//'):
+            img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
+        if img_url.startswith('://'):
+            img_url = img_url[3:]
+        if img_url.startswith('data:image'):
+            img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
+
+        # Aritzia is so picky!
+        if img_url.startswith('aritzia.scene7.com'):
+            img_url = f"https://{img_url}" 
+
+
         response = requests.get(img_url)
         if response.status_code == 200:
             img = Image.open(BytesIO(response.content))
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
-                img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=95)
-                img.save(f'articleimages/{filename}.webp', 'WEBP', quality=90) 
+                img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=100)
+            if img.mode == 'P':
+                img.save(f'articleimages/{filename}.webp', 'WEBP', quality=100) 
             img = img.resize((256, 256))
             img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=95)
         else:
@@ -212,7 +226,8 @@ def process_queue():
 
 # Run it!
 def main():
-    #load environmental variables
+
+    # Load environmental variables
     load_dotenv()
     ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
     SECRET_KEY = os.getenv("AWS_SECRET_KEY")
@@ -230,7 +245,7 @@ def main():
     for url in start_urls:
         url_queue.put((0, url))
 
-    # Create worker threads
+    # Create worker threads for efficiency
     num_threads = 10
     for _ in range(num_threads):
         thread = threading.Thread(target=process_queue)
@@ -250,34 +265,31 @@ def main():
         csv_writer.writerow(['Word', 'Frequency'])
         csv_writer.writerows(ranked_words)
 
-    logging.info("Data has been successfully exported to their respective csv. files!")
+    logging.info("All data has been successfully exported to their respective csv. files!")
 
-    try:
+    #try:
         # Upload files to S3 bucket
-        s3 = boto3.client(
-            's3', 
-            aws_access_key_id=ACCESS_KEY,
-            aws_secret_access_key=SECRET_KEY,
-        )
-        s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
-        s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
+        #s3 = boto3.client(
+            #'s3', 
+            #aws_access_key_id=ACCESS_KEY,
+            #aws_secret_access_key=SECRET_KEY,
+        #)
+        #s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
+        #s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
         
-        for file in os.listdir('articletext'):
-            s3.upload_file('articletext', 'gaineddata', file)
+        #for file in os.listdir('articletext'):
+            #s3.upload_file('articletext', 'gaineddata', file)
         
-        for file in os.listdir('articleimages'):
-            s3.upload_file('articleimages', 'gaineddata/images/', file)
+        #for file in os.listdir('articleimages'):
+            #s3.upload_file('articleimages', 'gaineddata/images/', file)
 
-        logging.info("Files have been uploaded to S3!")
-    except Exception as e:
-        logging.error(f"Error occurred while uploading files to S3: {e}")
+        #logging.info("Files have been uploaded to S3!")
+    #except Exception as e:
+        #logging.error(f"Error occurred while uploading files to S3: {e}")
 
 
 if __name__ == "__main__":
     main()
 
 
-
-
-# fix to get link value and images including webp
 # eventually put a crawler into it from aws to analyze data
