@@ -16,6 +16,9 @@ import os
 from PIL import Image
 from io import BytesIO
 from urllib.parse import urlparse
+import boto3
+from dotenv import load_dotenv
+
 
 {
     "Version": "2012-10-17",
@@ -30,6 +33,20 @@ from urllib.parse import urlparse
         }
     ]
 }
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "s3.amazonaws.com"
+            },
+            "Action": "sts:AssumeRole"
+        }
+    ]
+}
+
 
 # Words to filter out of CSV file later
 common_words = set([
@@ -89,7 +106,7 @@ def extract_article_content(url, output_dir, article_title):
         soup = BeautifulSoup(html_content, "html.parser")
         # Extract text content from article
         text_content = ""
-        for tag in soup.find_all(['p', 'span']):
+        for tag in soup.find_all('p', 'span', 'alt', 'title'):
             text_content += tag.get_text() + "\n"
 
         # Save text content to a file
@@ -106,12 +123,12 @@ def scrape_page(url):
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
-        title_tags = soup.find_all(['h1', 'h2', 'h3','a'])
+        title_tags = soup.find_all(['h1', 'h2', 'h3','a', 'div'])
         if title_tags:
             title = title_tags[0].get_text().lower()
             
             # Extract text content from article
-            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span']))
+            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span', 'alt', 'title']))
             # Clean the text
             cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
             # Tokenize the text
@@ -155,9 +172,6 @@ def download_and_resize_image(img_url, filename):
             logging.error("Empty image URL provided.")
             return
         parsed_url = urlparse(img_url)
-        if not parsed_url.scheme:
-            logging.error(f"Invalid image URL: {img_url}")
-            return
         if img_url.startswith('/'):
             img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
         elif img_url.startswith('data:image'):
@@ -167,6 +181,8 @@ def download_and_resize_image(img_url, filename):
             img = Image.open(BytesIO(response.content))
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
+                img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=95)
+                img.save(f'articleimages/{filename}.webp', 'WEBP', quality=90) 
             img = img.resize((256, 256))
             img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=95)
         else:
@@ -196,38 +212,18 @@ def process_queue():
 
 # Run it!
 def main():
+    #load environmental variables
+    load_dotenv()
+    ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+    SECRET_KEY = os.getenv("AWS_SECRET_KEY")
 
     # Set up logging
     logging.basicConfig(level=logging.INFO)
 
     # Start URLs for crawling
     start_urls = [
-        "https://www.vogue.com/fashion/celebrity-style",
-        "https://www.vogue.com/fashion/street-style",
-        "https://www.vogue.com/fashion/models",
-        "https://www.vogue.com/fashion/trends",
-        "https://www.asos.com/us/women/fashion-feed/?ctaref=ww|fashionandbeauty",
-        "https://www.aritzia.com/us/en/stories",
-        "https://www.glamour.com/fashion",
-        "https://www.cosmopolitan.com/style-beauty/fashion/",
-        "https://www.elle.com/fashion/",
-        "https://blog.nastygal.com/style/page/2/",
-        "https://www.ssense.com/en-us/editorial/fashion",
-        "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
-        "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
-        "https://www.anthropologie.com/stories-style",
-        "https://www.madewell.com/Inspo.html",
-        "https://www.farfetch.com/style-guide/",
-        "https://www.modaoperandi.com/editorial/what-we-are-wearing",
-        "https://www.brownsfashion.com/woman/stories/fashion",
-        "https://www.saksfifthavenue.com/?orgin=%2Feditorial",
-        "https://www.neimanmarcus.com/editorial",
-        "https://www.ssense.com/en-us/women?sort=popularity-desc",
-        "https://www.ssense.com/en-us/women",
-        "https://www.abercrombie.com/shop/us/womens-new-arrivals",
-        "https://shop.mango.com/us/women/featured/whats-new_d55927954?utm_source=c-producto-destacados&utm_medium=email&utm_content=woman&utm_campaign=E_WSWEOP24&sfmc_id=339434986&cjext=768854443022715810",
-        "https://www2.hm.com/en_us/women/seasonal-trending/romance.html",
-
+        "https://www.aritzia.com/en/clothing",
+        "https://www2.hm.com/en_us/women/seasonal-trending/romance.html"
     ]
 
     # Add start URLs to the queue
@@ -246,6 +242,7 @@ def main():
     print("-" * 40)
     logging.info("All URLs have been scraped.")
 
+
     # Rank word frequencies and export them to a CSV file
     ranked_words = word_counter.most_common()
     with open('ranked_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
@@ -255,6 +252,32 @@ def main():
 
     logging.info("Data has been successfully exported to their respective csv. files!")
 
+    try:
+        # Upload files to S3 bucket
+        s3 = boto3.client(
+            's3', 
+            aws_access_key_id=ACCESS_KEY,
+            aws_secret_access_key=SECRET_KEY,
+        )
+        s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
+        s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
+        
+        for file in os.listdir('articletext'):
+            s3.upload_file('articletext', 'gaineddata', file)
+        
+        for file in os.listdir('articleimages'):
+            s3.upload_file('articleimages', 'gaineddata/images/', file)
+
+        logging.info("Files have been uploaded to S3!")
+    except Exception as e:
+        logging.error(f"Error occurred while uploading files to S3: {e}")
+
+
 if __name__ == "__main__":
     main()
 
+
+
+
+# fix to get link value and images including webp
+# eventually put a crawler into it from aws to analyze data
