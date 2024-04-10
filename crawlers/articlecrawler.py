@@ -80,8 +80,15 @@ def get_html(url):
         if response.status_code == 200:
             return response.content
         else:
-            logging.error(f"Failed to fetch HTML from {url}. Status code: {response.status_code}")
-            return None
+            if response.status_code == 503:
+                logging.warning(f"Received 503 status code. Moving on to next URL.")
+                return None
+            elif response.status_code == 429:
+                logging.warning(f"Received 429 status code. Moving on to next URL.")
+                return None
+            else:
+                logging.error(f"Failed to fetch HTML from {url}. Status code: {response.status_code}")
+                return None
     except Exception as e:
         logging.error(f"Error occurred while fetching HTML from {url}: {e}")
         return None
@@ -95,12 +102,14 @@ def crawl_page(url):
         soup = BeautifulSoup(html_content, "html.parser")
         # Find all links on the page
         links = [link.get('href') for link in soup.find_all('a', href=True)]
+        seen_urls = set() # keep track of seen urls to avoid duplicates
         for link in links:
             if re.match(r'^https?://', link) and ('page=' in link):  
                 url_queue.put((0, link))
-            elif re.match(r'^/', link):  
+            elif re.match(r'^/', link) and link not in seen_urls:  
                 full_url = urljoin(url, link)
                 url_queue.put((1, full_url))  
+                seen_urls.add(link)
             elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords):
                 url_queue.put((2, link)) 
 
@@ -190,6 +199,8 @@ def download_and_resize_image(img_url, filename):
             img_url = img_url[3:]
         if img_url.startswith('data:image'):
             img_url = f"{parsed_url.scheme}://{parsed_url.netloc}{img_url}"
+        if img_url.startswith(':/'):
+            return
 
         # Aritzia is so picky!
         if img_url.startswith('aritzia.scene7.com'):
@@ -249,8 +260,55 @@ def main():
 
     # Start URLs for crawling
     start_urls = [
-        "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html"
-    ]
+            "https://www.vogue.com/fashion/celebrity-style",
+            "https://www.vogue.com/fashion/street-style",
+            "https://www.vogue.com/fashion/models",
+            "https://www.vogue.com/fashion/trends",
+            "https://www.asos.com/us/women/fashion-feed/?ctaref=ww|fashionandbeauty",
+            "https://www.aritzia.com/us/en/stories",
+            "https://www.aritzia.com/us/en/favourites-1",
+    	    "https://www.aritzia.com/us/en/new",
+            "https://www.aritzia.com/en/clothing",
+            "https://www.glamour.com/fashion",
+            "https://www.cosmopolitan.com/style-beauty/fashion/",
+            "https://www.elle.com/fashion/",
+            "https://blog.nastygal.com/style/page/2/",
+            "https://www.ssense.com/en-us/editorial/fashion",
+            "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
+    	    "https://www2.hm.com/en_us/women/deals/bestsellers.html",
+            "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
+            "https://www.anthropologie.com/stories-style",
+            "https://www.madewell.com/Inspo.html",
+            "https://www.farfetch.com/style-guide/",
+            "https://www.modaoperandi.com/editorial/what-we-are-wearing",
+            "https://www.brownsfashion.com/woman/stories/fashion",
+            "https://www.saksfifthavenue.com/?orgin=%2Feditorial",
+            "https://www.saksfifthavenue.com/c/women-s-new-arrivals",
+            "https://www.ssense.com/en-us/women?sort=popularity-desc",
+            "https://www.ssense.com/en-us/women",
+            "https://www.abercrombie.com/shop/us/womens-new-arrivals",
+            "https://shop.mango.com/us/women/featured/whats-new_d55927954?utm_source=c-producto-destacados&utm_medium=email&utm_content=woman&utm_campaign=E_WSWEOP24&sfmc_id=339434986&cjext=768854443022715810",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/trend-edit.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/tailored.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/co-ords.html",				
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/craft.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/linen.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/warm-weather.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/city-chic.html",
+            "https://www.whowhatwear.com/section/fashion"
+            "https://www.whowhatwear.com/section/style-tips",
+            "https://www.whowhatwear.com/section/celebrity-style",
+            "https://www.whowhatwear.com/section/outfit-ideas",
+            "https://www.whowhatwear.com/section/shopping",
+            "https://www.whowhatwear.com/section/trends",
+            "https://www.whowhatwear.com/section/wardrobe-essentials",
+            "https://www.nylon.com/fashion",
+            "https://www.nylon.com/style",
+            "https://www.shopcider.com/collection/new?listSource=homepage%3Bcollection_new%3B1",
+            "https://www.shopcider.com/product/list?collection_id=94&link_url=https%3A%2F%2Fwww.shopcider.com%2Fproduct%2Flist%3Fcollection_id%3D94&operationpage_title=homepage&operation_position=2&operation_type=category&operation_content=Bestsellers&operation_image=&operation_update_time=1712742203550&listSource=homepage%3Bcollection_94%3B2",
+            "https://www.prettylittlething.us/new-in-us.html",
+            "https://www.prettylittlething.us/shop-by/trends.html",
+        ]
 
     # Add start URLs to the queue
     for url in start_urls:
@@ -285,8 +343,8 @@ def main():
             aws_access_key_id=ACCESS_KEY,
             aws_secret_access_key=SECRET_KEY,
         )
-        #s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
-        #s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
+        s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
+        s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
         
         for filename in os.listdir('articletext'):
             file_path = os.path.join('articletext', filename)  
