@@ -308,6 +308,9 @@ def main():
             "https://www.shopcider.com/product/list?collection_id=94&link_url=https%3A%2F%2Fwww.shopcider.com%2Fproduct%2Flist%3Fcollection_id%3D94&operationpage_title=homepage&operation_position=2&operation_type=category&operation_content=Bestsellers&operation_image=&operation_update_time=1712742203550&listSource=homepage%3Bcollection_94%3B2",
             "https://www.prettylittlething.us/new-in-us.html",
             "https://www.prettylittlething.us/shop-by/trends.html",
+            "https://us.princesspolly.com/collections/new",
+            "https://us.princesspolly.com/collections/best-sellers"
+
         ]
 
     # Add start URLs to the queue
