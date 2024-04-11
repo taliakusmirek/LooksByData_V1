@@ -75,15 +75,6 @@ url_queue = PriorityQueue()
 # Function to get HTML content from a URL
 def get_html(url, retries=1, delay=35):
     try:
-
-        # VOGUE ONLY CODE IS BELOW
-        # why? well....whenever you scrape vogue, you must append to their article links the domain name. 
-        if not url.startswith("https://"):
-            url = "https://www.vogue.com" + url
-
-
-
-        # Regular function code starts here!
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
@@ -106,7 +97,16 @@ def get_html(url, retries=1, delay=35):
 def crawl_page(url):
     if url.startswith('/'):
         url = f"https:/{url}"
+
+
+
+    # VOGUE ONLY CODE IS BELOW
+    # why? well....whenever you scrape vogue, you must append to their article links the domain name. 
+    if not url.startswith("https://"):
+        url = "https://www.vogue.com" + url
     html_content = get_html(url)
+    
+    # Continuing on...
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
         # Find all links on the page
@@ -250,12 +250,6 @@ def process_queue():
         time.sleep(random.uniform(3, 15))  
 
 
-
-
-
-
-
-
 # Run it!
 def main():
 
@@ -376,4 +370,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+
+# Notes:
 # make sure to scrape on a jupyter server and not on a local machine for the AI part of this.
+# make sure when model decides new trends if old data is scraped it recognizes its already seen it and doesnt consider it as new and possibly popular
