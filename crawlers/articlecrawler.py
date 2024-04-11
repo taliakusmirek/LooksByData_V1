@@ -310,7 +310,8 @@ def main():
             "https://www.prettylittlething.us/shop-by/trends.html",
             "https://us.princesspolly.com/collections/new",
             "https://us.princesspolly.com/collections/best-sellers",
-            "https://www.aloyoga.com/collections/new-arrivals"
+            "https://www.aloyoga.com/collections/new-arrivals",
+            "https://www.aeropostale.com/women-teen-girls/whats-new/new-arrivals/"
         ]
 
     # Add start URLs to the queue
