@@ -75,6 +75,15 @@ url_queue = PriorityQueue()
 # Function to get HTML content from a URL
 def get_html(url, retries=1, delay=35):
     try:
+
+        # VOGUE ONLY CODE IS BELOW
+        # why? well....whenever you scrape vogue, you must append to their article links the domain name. 
+        if not url.startswith("https://"):
+            url = "https://www.vogue.com" + url
+
+
+
+        # Regular function code starts here!
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
