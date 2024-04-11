@@ -48,6 +48,10 @@ from urllib.parse import urljoin
 }
 
 
+# Value to store URLs that have already been seen
+seen_urls = set() 
+
+
 # Values to filter out of CSV ranking file later
 common_words = set([
     word for word in (set([
@@ -95,15 +99,15 @@ def get_html(url, retries=1, delay=35):
 
 # Function to crawl a page and find links to scrape
 def crawl_page(url):
-    if url.startswith('/'):
-        url = f"https:/{url}"
-
-
+    global seen_urls
+    # IF NOT SCRAPING VOGUE
+    #if url.startswith('/'):
+        #url = f"https:/{url}"
 
     # VOGUE ONLY CODE IS BELOW
     # why? well....whenever you scrape vogue, you must append to their article links the domain name. 
-    if not url.startswith("https://"):
-        url = "https://www.vogue.com" + url
+    if url.startswith("/"):
+        url = "https://www.vogue.com{url}"
     html_content = get_html(url)
     
     # Continuing on...
@@ -111,16 +115,17 @@ def crawl_page(url):
         soup = BeautifulSoup(html_content, "html.parser")
         # Find all links on the page
         links = [link.get('href') for link in soup.find_all('a', href=True)]
-        seen_urls = set() # keep track of seen urls to avoid duplicates
         for link in links:
-            if re.match(r'^https?://', link) and ('page=' in link):  
+            if re.match(r'^https?://', link) and ('page=' in link) and link not in seen_urls:  
                 url_queue.put((0, link))
+                seen_urls.add(link)
             elif re.match(r'^/', link) and link not in seen_urls:  
                 full_url = urljoin(url, link)
                 url_queue.put((1, full_url))  
                 seen_urls.add(link)
-            elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords):
+            elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords) and link not in seen_urls:
                 url_queue.put((2, link)) 
+                seen_urls.add(link)
 
 # Get full HTML text content of the article and save it to a text file
 def extract_article_content(url, output_dir, article_title):
@@ -136,61 +141,67 @@ def extract_article_content(url, output_dir, article_title):
         file_name = article_title.replace('/', '_')  # Replace '/' in article title with '_'
         with open(f'{output_dir}/{file_name}_content.txt', 'w', encoding='utf-8') as file:
             file.write(text_content)
-        logging.info(f"Article content extracted and saved to {output_dir}/{file_name}_content.txt")
-        
+        logging.info(f"Article content extracted and saved to {output_dir}/{file_name}_content.txt")      
     else:
         logging.error(f"Failed to fetch HTML from {url}")
 
 
 # Function to scrape article content from a page and its subpages
 def scrape_page(url):
-    time.sleep(random.uniform(5, 10))
-    html_content = get_html(url)
-    if html_content:
-        soup = BeautifulSoup(html_content, "html.parser")
-        title_tags = soup.find_all(['h1', 'h2', 'h3','a'])
-        if title_tags:
-            title = title_tags[0].get_text().lower()
-            
-            # Extract text content from article to split into individual words
-            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span', 'alt', 'title', 'class', 'h1', 'h2', 'h3']))
-            # Clean the text
-            cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
-            # Tokenize the text
-            words = cleaned_text.split()
-            words = [word for word in words if word not in common_words]
-            word_counter.update(words)
-            # Write article name and link to CSV to store URLS
-            article_name = title_tags[0].get_text()
-            with open('articles.csv', 'a', newline='') as csvfile:
-                csv_writer = csv.writer(csvfile)
-                csv_writer.writerow([url])
+    global seen_urls
+    if url not in seen_urls:
+        time.sleep(random.uniform(5, 10))
+        html_content = get_html(url)
+        if html_content:
+            soup = BeautifulSoup(html_content, "html.parser")
+            title_tags = soup.find_all(['h1', 'h2', 'h3', 'a'])
+            if title_tags:
+                title = title_tags[0].get_text().lower()
+                
+                # Extract text content from article to split into individual words
+                text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span', 'alt', 'title', 'class', 'h1', 'h2', 'h3']))
+                # Clean the text
+                cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
+                # Tokenize the text
+                words = cleaned_text.split()
+                words = [word for word in words if word not in common_words]
+                word_counter.update(words)
+                # Write article name and link to CSV to store URLS
+                article_name = title_tags[0].get_text()
+                with open('articles.csv', 'a', newline='') as csvfile:
+                    csv_writer = csv.writer(csvfile)
+                    csv_writer.writerow([url])
 
-            # Extract and save full article text for AI model training
-            output_dir = f'articletext'  
-            os.makedirs(output_dir, exist_ok=True)  
-            extract_article_content(url, output_dir, article_name)
+                # Extract and save full article text for AI model training
+                output_dir = f'articletext'  
+                os.makedirs(output_dir, exist_ok=True)  
+                extract_article_content(url, output_dir, article_name)
 
-            # Extract and save images
-            images = soup.find_all('img')
-            for idx, img in enumerate(images):
-                img_url = img.get('src')
-                download_and_resize_image(img_url, f'{article_name}_{idx}')
+                # Extract and save images
+                images = soup.find_all('img')
+                for idx, img in enumerate(images):
+                    img_url = img.get('src')
+                    download_and_resize_image(img_url, f'{article_name}_{idx}')
+
+                logging.info(f"Scraped page: {url}")
+            else:
+                logging.warning(f"No title found for page: {url}")
+
+            # Find all links on the page and scrape subpages
+            links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6'], {'href': True})]
+            for link in links:
+                if not link.startswith('http'):
+                    # VOGUE VERSION
+                    link = urljoin('https://www.vogue.com', link) 
+                    # NON-VOGUE VERSION
+                    #link = urljoin(url, link)
+                url_queue.put((1, link))
 
             logging.info(f"Scraped page: {url}")
+
+
         else:
-            logging.warning(f"No title found for page: {url}")
-
-        # Find all links on the page and scrape subpages
-        links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6', 'span'], {'href': True})]
-        for link in links:
-            url_queue.put((1, link))  # Add subpage to the queue with higher priority
-
-        logging.info(f"Scraped page: {url}")
-
-
-    else:
-        logging.error(f"Failed to scrape page: {url}")
+            logging.error(f"Failed to scrape page: {url}")
 
 # Function to download and resize images, accounting for different format types
 def download_and_resize_image(img_url, filename):
@@ -369,6 +380,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+
+# IF NOT ON VOGUE DONT APPEND, IF ON VOGUE GET CORRECT SUBPAGES, READ FUL L ARTICLES
+
+
+
 
 
 # Notes:
