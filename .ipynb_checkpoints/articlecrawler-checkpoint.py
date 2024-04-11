@@ -367,4 +367,10 @@ def main():
 if __name__ == "__main__":
     main()
 
-# make sure to scrape on a jupyter server and not on a local machine for the AI part of this.
+
+
+
+
+
+# make sure to scrape on a jupyter server and not on a local machine
+
