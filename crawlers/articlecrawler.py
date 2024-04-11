@@ -73,22 +73,22 @@ url_queue = PriorityQueue()
 
 
 # Function to get HTML content from a URL
-def get_html(url):
+def get_html(url, retries=1, delay=35):
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.content
-        else:
-            if response.status_code == 503:
-                logging.warning(f"Received 503 status code. Moving on to next URL.")
-                return None
-            elif response.status_code == 429:
-                logging.warning(f"Received 429 status code. Moving on to next URL.")
-                return None
+        elif response.status_code in [503, 429]:
+            logging.warning(f"Received {response.status_code} status code. Retrying after delay.")
+            time.sleep(delay)
+            if retries > 0:
+                return get_html(url, retries - 1, delay)
             else:
-                logging.error(f"Failed to fetch HTML from {url}. Status code: {response.status_code}")
+                logging.warning(f"Retry limit exceeded for {url}. Moving on to next URL.")
                 return None
+        else:
+            logging.error(f"Failed to fetch HTML from {url}. Status code: {response.status_code}")
     except Exception as e:
         logging.error(f"Error occurred while fetching HTML from {url}: {e}")
         return None
@@ -309,8 +309,8 @@ def main():
             "https://www.prettylittlething.us/new-in-us.html",
             "https://www.prettylittlething.us/shop-by/trends.html",
             "https://us.princesspolly.com/collections/new",
-            "https://us.princesspolly.com/collections/best-sellers"
-
+            "https://us.princesspolly.com/collections/best-sellers",
+            "https://www.aloyoga.com/collections/new-arrivals"
         ]
 
     # Add start URLs to the queue
@@ -373,4 +373,3 @@ if __name__ == "__main__":
 
 # make sure to scrape on a jupyter server and not on a local machine
 
-# eventually put a crawler into it from aws to analyze data
