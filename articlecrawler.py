@@ -20,6 +20,7 @@ import boto3
 from dotenv import load_dotenv
 from urllib.parse import urljoin
 
+"""
 {
     "Version": "2012-10-17",
     "Statement": [
@@ -46,6 +47,7 @@ from urllib.parse import urljoin
         }
     ]
 }
+"""
 
 
 # Value to store URLs that have already been seen
@@ -77,9 +79,11 @@ url_queue = PriorityQueue()
 
 
 # Function to get HTML content from a URL
-def get_html(url, retries=1, delay=35):
+def get_html(url, retries=1, delay=5):
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        }
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.content
@@ -93,9 +97,16 @@ def get_html(url, retries=1, delay=35):
                 return None
         else:
             logging.error(f"Failed to fetch HTML from {url}. Status code: {response.status_code}")
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
+        logging.info(f"RETIRES: {retries}")
         logging.error(f"Error occurred while fetching HTML from {url}: {e}")
-        return None
+        if retries > 0:
+            time.sleep(delay)
+            return get_html(url, retries - 1, delay)
+        else:
+            logging.warning(f"Retry limit exceeded for {url}. Moving on to next URL.")
+            return None
+
 
 # Function to crawl a page and find links to scrape
 def crawl_page(url):
@@ -148,8 +159,6 @@ def extract_article_content(url, output_dir, article_title):
 
 # Function to scrape article content from a page and its subpages
 def scrape_page(url):
-    global seen_urls
-    if url not in seen_urls:
         time.sleep(random.uniform(5, 10))
         html_content = get_html(url)
         if html_content:
@@ -260,6 +269,13 @@ def process_queue():
         url_queue.task_done()
         time.sleep(random.uniform(3, 15))  
 
+# Function to print the current contents of the URL queue
+def print_queue():
+    queue_contents = list(url_queue.queue)
+    print("Current URL Queue:")
+    for priority, url in queue_contents:
+        print(f"Priority: {priority}, URL: {url}")
+
 
 # Run it!
 def main():
@@ -331,6 +347,7 @@ def main():
     # Add start URLs to the queue
     for url in start_urls:
         url_queue.put((0, url))
+        print_queue()
 
     # Create worker threads for efficiency
     num_threads = 10
