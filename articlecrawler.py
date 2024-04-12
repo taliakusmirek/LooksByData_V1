@@ -53,6 +53,8 @@ from urllib.parse import urljoin
 # Value to store URLs that have already been seen
 seen_urls = set() 
 
+# Count for saved articles to not overlap
+count = 0
 
 # Values to filter out of CSV ranking file later
 common_words = set([
@@ -140,7 +142,8 @@ def crawl_page(url, retries = 1, delay = 5):
     
 
 # Get full HTML text content of the article and save it to a text file
-def extract_article_content(url, output_dir, article_title):
+def extract_article_content(url, output_dir):
+    global count
     html_content = get_html(url)
     if html_content:
         soup = BeautifulSoup(html_content, "html.parser")
@@ -150,10 +153,10 @@ def extract_article_content(url, output_dir, article_title):
             text_content += tag.get_text() + "\n"
 
         # Save text content to a file
-        file_name = article_title.replace('/', '_')  # Replace '/' in article title with '_'
-        with open(f'{output_dir}/{file_name}_content.txt', 'w', encoding='utf-8') as file:
+        count += 1
+        with open(f'{output_dir}/{count}_content.txt', 'w', encoding='utf-8') as file:
             file.write(text_content)
-        logging.info(f"Article content extracted and saved to {output_dir}/{file_name}_content.txt")      
+        logging.info(f"Article content extracted and saved to {output_dir}/{count}_content.txt")      
     else:
         logging.error(f"Failed to fetch HTML from {url}")
 
@@ -185,7 +188,7 @@ def scrape_page(url, retries=1, delay=5):
                 # Extract and save full article text for AI model training
                 output_dir = f'articletext'  
                 os.makedirs(output_dir, exist_ok=True)  
-                extract_article_content(url, output_dir, article_name)
+                extract_article_content(url, output_dir)
 
                 # Extract and save images
                 images = soup.find_all('img')
@@ -269,12 +272,12 @@ def process_queue():
     while True:
         priority, url = url_queue.get()
         if priority == 0:
+            time.sleep(60)
             scrape_page(url)
-            print_queue()
         else:  # Low priority
             crawl_page(url)
-            print_queue()
-            url_queue.put((0, url))  # Re-add URL to queue with higher priority after it's been crawled
+            time.sleep(random.uniform(3, 15))
+            url_queue.put((0, url))  # Re-add URL to queue with higher priority after it's been crawled to be scraped
         url_queue.task_done()
         time.sleep(random.uniform(3, 15))
 
@@ -393,12 +396,12 @@ def main():
         s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
         s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
         
-        for filename in os.listdir('articletext'):
-            file_path = os.path.join('articletext', filename)  
+        for filename in os.listdir('/Users/taliak/Documents/GitHub/LooksByData/articletext'):
+            file_path = os.path.join('/Users/taliak/Documents/GitHub/LooksByData/articletext', filename)  
             s3.upload_file(file_path, 'gaineddata', filename) 
 
-        for filename in os.listdir('articleimages'):
-            file_path = os.path.join('articleimages', filename)
+        for filename in os.listdir('/Users/taliak/Documents/GitHub/LooksByData/articleimages'):
+            file_path = os.path.join('/Users/taliak/Documents/GitHub/LooksByData/articleimages', filename)
             s3.upload_file(file_path, 'gaineddata/images/', filename)
 
 
