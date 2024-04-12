@@ -97,19 +97,15 @@ def get_html(url, retries=1, delay=5):
                 return None
         else:
             logging.error(f"Failed to fetch HTML from {url}. Status code: {response.status_code}")
-    except requests.exceptions.RequestException as e:
-        logging.info(f"RETIRES: {retries}")
-        logging.error(f"Error occurred while fetching HTML from {url}: {e}")
-        if retries > 0:
-            time.sleep(delay)
-            return get_html(url, retries - 1, delay)
-        else:
-            logging.warning(f"Retry limit exceeded for {url}. Moving on to next URL.")
             return None
-
-
+    except Exception as e:
+        logging.error(f"Error fetching HTML from {url}: {e}, moving onto next URL.")
+        retries -= 1
+        return None
+    
+    
 # Function to crawl a page and find links to scrape
-def crawl_page(url):
+def crawl_page(url, retries = 1, delay = 5):
     global seen_urls
     # IF NOT SCRAPING VOGUE
     #if url.startswith('/'):
@@ -119,7 +115,7 @@ def crawl_page(url):
     # why? well....whenever you scrape vogue, you must append to their article links the domain name. 
     if url.startswith("/"):
         url = "https://www.vogue.com{url}"
-    html_content = get_html(url)
+    html_content = get_html(url, retries=retries, delay=delay)
     
     # Continuing on...
     if html_content:
@@ -137,6 +133,11 @@ def crawl_page(url):
             elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords) and link not in seen_urls:
                 url_queue.put((2, link)) 
                 seen_urls.add(link)
+        logging.info(f"Crawled page: {url}")
+    else:
+        logging.error(f"Failed to crawl page: {url}")
+        return None
+    
 
 # Get full HTML text content of the article and save it to a text file
 def extract_article_content(url, output_dir, article_title):
@@ -158,9 +159,9 @@ def extract_article_content(url, output_dir, article_title):
 
 
 # Function to scrape article content from a page and its subpages
-def scrape_page(url):
+def scrape_page(url, retries=1, delay=5):
         time.sleep(random.uniform(5, 10))
-        html_content = get_html(url)
+        html_content = get_html(url, retries=retries, delay=delay)
         if html_content:
             soup = BeautifulSoup(html_content, "html.parser")
             title_tags = soup.find_all(['h1', 'h2', 'h3', 'a'])
@@ -205,12 +206,17 @@ def scrape_page(url):
                     # NON-VOGUE VERSION
                     #link = urljoin(url, link)
                 url_queue.put((1, link))
-
+                print_queue()
             logging.info(f"Scraped page: {url}")
 
 
         else:
-            logging.error(f"Failed to scrape page: {url}")
+            if retries > 0:
+                logging.error(f"Failed to scrape page: {url}. Retrying...")
+                scrape_page(url, retries=retries - 1, delay=delay)
+            else:
+                logging.error(f"Failed to scrape page: {url}. Retry limit exceeded.")
+                return None
 
 # Function to download and resize images, accounting for different format types
 def download_and_resize_image(img_url, filename):
@@ -262,12 +268,15 @@ def download_and_resize_image(img_url, filename):
 def process_queue():
     while True:
         priority, url = url_queue.get()
-        if priority == 0:  # High priority 
+        if priority == 0:
             scrape_page(url)
+            print_queue()
         else:  # Low priority
             crawl_page(url)
+            print_queue()
+            url_queue.put((0, url))  # Re-add URL to queue with higher priority after it's been crawled
         url_queue.task_done()
-        time.sleep(random.uniform(3, 15))  
+        time.sleep(random.uniform(3, 15))
 
 # Function to print the current contents of the URL queue
 def print_queue():
@@ -347,7 +356,6 @@ def main():
     # Add start URLs to the queue
     for url in start_urls:
         url_queue.put((0, url))
-        print_queue()
 
     # Create worker threads for efficiency
     num_threads = 10
@@ -356,6 +364,10 @@ def main():
         thread.daemon = True
         thread.start()
     
+    # Periodically check what URLs are in the queue
+    print_queue()
+    time.sleep(60)    
+        
     # Wait for all URLs to be scraped
     url_queue.join()
     print("-" * 40)
@@ -400,13 +412,5 @@ if __name__ == "__main__":
 
 
 
-
-# IF NOT ON VOGUE DONT APPEND, IF ON VOGUE GET CORRECT SUBPAGES, READ FUL L ARTICLES
-
-
-
-
-
 # Notes:
 # make sure to scrape on a jupyter server and not on a local machine for the AI part of this.
-# make sure when model decides new trends if old data is scraped it recognizes its already seen it and doesnt consider it as new and possibly popular
