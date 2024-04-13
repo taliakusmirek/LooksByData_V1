@@ -201,25 +201,12 @@ def scrape_page(url, retries=1, delay=5):
                 logging.warning(f"No title found for page: {url}")
 
             # Find all links on the page and scrape subpages
-            links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6'], {'href': True})]
+            links = [link.get('href') for link in soup.find_all(['a'], {'href': True})]
             for link in links:
 
-                
-                # VOGUE ONLY
-                if link.startswith('http://www.condenast.com/'):
-                    # Don't go down this rabbit hole
-                    continue
-
-
                 if not link.startswith('http'):
-                    # VOGUE VERSION
-                    link = urljoin('https://www.vogue.com', link) 
-                    # NON-VOGUE VERSION
-                    #link = urljoin('https://', link)
-
-                # PRIORTY IS 0 ON VOGUE TO MAKE SURE YOU DON'T SCRAPE THE SUBPAGES
-                # PRIORITY IS 1 BECAUSE WE WANT TO SCRAPE THE SUBPAGES
-                url_queue.put((0, link))
+                    link = urljoin(url, link)
+                    url_queue.put((1, link))
             logging.info(f"Scraped page: {url}")
 
 
@@ -312,59 +299,55 @@ def main():
 
     # Start URLs for crawling
     start_urls = [
-            "https://www.vogue.com/fashion/celebrity-style",
-            "https://www.vogue.com/fashion/street-style",
-            "https://www.vogue.com/fashion/models",
-            "https://www.vogue.com/fashion/trends",
-            #"https://www.asos.com/us/women/fashion-feed/?ctaref=ww|fashionandbeauty",
-            #"https://www.aritzia.com/us/en/stories",
-            #"https://www.aritzia.com/us/en/favourites-1",
-    	    #"https://www.aritzia.com/us/en/new",
-            #"https://www.aritzia.com/en/clothing",
-            #"https://www.glamour.com/fashion",
-            #"https://www.cosmopolitan.com/style-beauty/fashion/",
-            #"https://www.elle.com/fashion/",
-            #"https://blog.nastygal.com/style/page/2/",
-            #"https://www.ssense.com/en-us/editorial/fashion",
-            #"https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
-    	    #"https://www2.hm.com/en_us/women/deals/bestsellers.html",
-            #"https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
-            #"https://www.anthropologie.com/stories-style",
-            #"https://www.madewell.com/Inspo.html",
-            #"https://www.farfetch.com/style-guide/",
-            #"https://www.modaoperandi.com/editorial/what-we-are-wearing",
-            #"https://www.brownsfashion.com/woman/stories/fashion",
-            #"https://www.saksfifthavenue.com/?orgin=%2Feditorial",
-            #"https://www.saksfifthavenue.com/c/women-s-new-arrivals",
-            #"https://www.ssense.com/en-us/women?sort=popularity-desc",
-            #"https://www.ssense.com/en-us/women",
-            #"https://www.abercrombie.com/shop/us/womens-new-arrivals",
-            #"https://shop.mango.com/us/women/featured/whats-new_d55927954?utm_source=c-producto-destacados&utm_medium=email&utm_content=woman&utm_campaign=E_WSWEOP24&sfmc_id=339434986&cjext=768854443022715810",
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/trend-edit.html",
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/tailored.html",
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/co-ords.html",				
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/craft.html",
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/linen.html",
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/warm-weather.html",
-    	    #"https://www2.hm.com/en_us/women/seasonal-trending/city-chic.html",
-            #"https://www.whowhatwear.com/section/fashion"
-            #"https://www.whowhatwear.com/section/style-tips",
-            #"https://www.whowhatwear.com/section/celebrity-style",
-            #"https://www.whowhatwear.com/section/outfit-ideas",
-            #"https://www.whowhatwear.com/section/shopping",
-            #"https://www.whowhatwear.com/section/trends",
-            #"https://www.whowhatwear.com/section/wardrobe-essentials",
-            #"https://www.nylon.com/fashion",
-            #"https://www.nylon.com/style",
-            #"https://www.shopcider.com/collection/new?listSource=homepage%3Bcollection_new%3B1",
-            #"https://www.shopcider.com/product/list?collection_id=94&link_url=https%3A%2F%2Fwww.shopcider.com%2Fproduct%2Flist%3Fcollection_id%3D94&operationpage_title=homepage&operation_position=2&operation_type=category&operation_content=Bestsellers&operation_image=&operation_update_time=1712742203550&listSource=homepage%3Bcollection_94%3B2",
-            #"https://www.prettylittlething.us/new-in-us.html",
-            #"https://www.prettylittlething.us/shop-by/trends.html",
-            #"https://us.princesspolly.com/collections/new",
-            #"https://us.princesspolly.com/collections/best-sellers",
-            #"https://www.aloyoga.com/collections/new-arrivals",
-            #"https://www.aeropostale.com/women-teen-girls/whats-new/new-arrivals/",
-            #"https://www.pullandbear.com/us/woman/new-arrivals-n6491"
+            "https://www.asos.com/us/women/fashion-feed/?ctaref=ww|fashionandbeauty",
+            "https://www.aritzia.com/us/en/stories",
+            "https://www.aritzia.com/us/en/favourites-1",
+    	    "https://www.aritzia.com/us/en/new",
+            "https://www.aritzia.com/en/clothing",
+            "https://www.glamour.com/fashion",
+            "https://www.cosmopolitan.com/style-beauty/fashion/",
+            "https://www.elle.com/fashion/",
+            "https://blog.nastygal.com/style/page/2/",
+            "https://www.ssense.com/en-us/editorial/fashion",
+            "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
+    	    "https://www2.hm.com/en_us/women/deals/bestsellers.html",
+            "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
+            "https://www.anthropologie.com/stories-style",
+            "https://www.madewell.com/Inspo.html",
+            "https://www.farfetch.com/style-guide/",
+            "https://www.modaoperandi.com/editorial/what-we-are-wearing",
+            "https://www.brownsfashion.com/woman/stories/fashion",
+            "https://www.saksfifthavenue.com/?orgin=%2Feditorial",
+            "https://www.saksfifthavenue.com/c/women-s-new-arrivals",
+            "https://www.ssense.com/en-us/women?sort=popularity-desc",
+            "https://www.ssense.com/en-us/women",
+            "https://www.abercrombie.com/shop/us/womens-new-arrivals",
+            "https://shop.mango.com/us/women/featured/whats-new_d55927954?utm_source=c-producto-destacados&utm_medium=email&utm_content=woman&utm_campaign=E_WSWEOP24&sfmc_id=339434986&cjext=768854443022715810",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/trend-edit.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/tailored.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/co-ords.html",				
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/craft.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/linen.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/warm-weather.html",
+    	    "https://www2.hm.com/en_us/women/seasonal-trending/city-chic.html",
+            "https://www.whowhatwear.com/section/fashion"
+            "https://www.whowhatwear.com/section/style-tips",
+            "https://www.whowhatwear.com/section/celebrity-style",
+            "https://www.whowhatwear.com/section/outfit-ideas",
+            "https://www.whowhatwear.com/section/shopping",
+            "https://www.whowhatwear.com/section/trends",
+            "https://www.whowhatwear.com/section/wardrobe-essentials",
+            "https://www.nylon.com/fashion",
+            "https://www.nylon.com/style",
+            "https://www.shopcider.com/collection/new?listSource=homepage%3Bcollection_new%3B1",
+            "https://www.shopcider.com/product/list?collection_id=94&link_url=https%3A%2F%2Fwww.shopcider.com%2Fproduct%2Flist%3Fcollection_id%3D94&operationpage_title=homepage&operation_position=2&operation_type=category&operation_content=Bestsellers&operation_image=&operation_update_time=1712742203550&listSource=homepage%3Bcollection_94%3B2",
+            "https://www.prettylittlething.us/new-in-us.html",
+            "https://www.prettylittlething.us/shop-by/trends.html",
+            "https://us.princesspolly.com/collections/new",
+            "https://us.princesspolly.com/collections/best-sellers",
+            "https://www.aloyoga.com/collections/new-arrivals",
+            "https://www.aeropostale.com/women-teen-girls/whats-new/new-arrivals/",
+            "https://www.pullandbear.com/us/woman/new-arrivals-n6491"
         ]
 
     # Add start URLs to the queue
@@ -424,5 +407,4 @@ if __name__ == "__main__":
 
 
 # Notes:
-# remember to change priority and url_queue.put in the scrape_page function to 0 depending on if you are scraping vogue.
 # make sure to scrape on a jupyter server and not on a local machine for the AI part of this.
