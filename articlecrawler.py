@@ -203,13 +203,23 @@ def scrape_page(url, retries=1, delay=5):
             # Find all links on the page and scrape subpages
             links = [link.get('href') for link in soup.find_all(['div', 'a', 'h3', 'h6'], {'href': True})]
             for link in links:
+
+                
+                # VOGUE ONLY
+                if link.startswith('http://www.condenast.com/'):
+                    # Don't go down this rabbit hole
+                    continue
+
+
                 if not link.startswith('http'):
                     # VOGUE VERSION
                     link = urljoin('https://www.vogue.com', link) 
                     # NON-VOGUE VERSION
-                    #link = urljoin(url, link)
-                url_queue.put((1, link))
-                print_queue()
+                    #link = urljoin('https://', link)
+
+                # PRIORTY IS 0 ON VOGUE TO MAKE SURE YOU DON'T SCRAPE THE SUBPAGES
+                # PRIORITY IS 1 BECAUSE WE WANT TO SCRAPE THE SUBPAGES
+                url_queue.put((0, link))
             logging.info(f"Scraped page: {url}")
 
 
@@ -276,7 +286,7 @@ def process_queue():
             scrape_page(url)
         else:  # Low priority
             crawl_page(url)
-            time.sleep(random.uniform(3, 15))
+            time.sleep(60)
             url_queue.put((0, url))  # Re-add URL to queue with higher priority after it's been crawled to be scraped
         url_queue.task_done()
         time.sleep(random.uniform(3, 15))
@@ -353,7 +363,8 @@ def main():
             #"https://us.princesspolly.com/collections/new",
             #"https://us.princesspolly.com/collections/best-sellers",
             #"https://www.aloyoga.com/collections/new-arrivals",
-            #"https://www.aeropostale.com/women-teen-girls/whats-new/new-arrivals/"
+            #"https://www.aeropostale.com/women-teen-girls/whats-new/new-arrivals/",
+            #"https://www.pullandbear.com/us/woman/new-arrivals-n6491"
         ]
 
     # Add start URLs to the queue
@@ -367,10 +378,7 @@ def main():
         thread.daemon = True
         thread.start()
     
-    # Periodically check what URLs are in the queue
-    print_queue()
-    time.sleep(60)    
-        
+   
     # Wait for all URLs to be scraped
     url_queue.join()
     print("-" * 40)
@@ -416,4 +424,5 @@ if __name__ == "__main__":
 
 
 # Notes:
+# remember to change priority and url_queue.put in the scrape_page function to 0 depending on if you are scraping vogue.
 # make sure to scrape on a jupyter server and not on a local machine for the AI part of this.
