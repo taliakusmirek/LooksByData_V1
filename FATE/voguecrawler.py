@@ -24,8 +24,11 @@ from urllib.parse import urljoin
 # Initialize a priority queue to store URLs to scrape
 url_queue = PriorityQueue()
 
-# Count for saved articles to not overlap
+# Count for saved articles to not overlap and instead be numerically organized
 count = 0
+
+# Set to store visited URLs
+visited_urls = set()
 
 # Values to filter out of CSV ranking file later
 common_words = set([
@@ -58,7 +61,7 @@ def get_html(url, retries=1, delay=5):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
         }
         response = requests.get(url, headers=headers)
-        if response.status_code == 200:
+        if response.status_code == 200 and url not in visited_urls:
             return response.content
         elif response.status_code in [503, 429]:
             logging.warning(f"Received {response.status_code} status code. Retrying after delay.")
@@ -97,8 +100,8 @@ def extract_article_content(url, output_dir):
 
 # Function to scrape article content from a page and its subpages
 def scrape_page(url, retries=1, delay=5):
-        time.sleep(random.uniform(5, 10))
         html_content = get_html(url, retries=retries, delay=delay)
+        visited_urls.add(url)
         if html_content:
             soup = BeautifulSoup(html_content, "html.parser")
             images = soup.find_all('img')
@@ -161,9 +164,8 @@ def scrape_page(url, retries=1, delay=5):
                 logging.error(f"Failed to scrape page: {url}. Retry limit exceeded.")
                 return None
 
-# Function to scrape article content from a page and its subpages
+# Function to scrape article content from a page's subpages
 def scrape_subpage(url, retries=1, delay=5):
-        time.sleep(random.uniform(5, 10))
         html_content = get_html(url, retries=retries, delay=delay)
         if html_content:
             soup = BeautifulSoup(html_content, "html.parser")
@@ -177,7 +179,7 @@ def scrape_subpage(url, retries=1, delay=5):
             words = [word for word in words if word not in common_words]
             word_counter.update(words)
             # Write article name and link to CSV to store URLS
-            with open('articles.csv', 'a', newline='') as csvfile:
+            with open('voguearticles.csv', 'a', newline='') as csvfile:
                 csv_writer = csv.writer(csvfile)
                 csv_writer.writerow([url])
 
@@ -249,15 +251,19 @@ def print_queue():
 def process_queue():
     while True:
         priority, url = url_queue.get()
-        time.sleep(30)
+        time.sleep(90)
         if priority == 0:
             scrape_page(url)
             url_queue.task_done()
         if priority == 1:
             scrape_subpage(url)
             url_queue.task_done()
-        time.sleep(90)
-        print_queue()
+        if url_queue.empty():
+            break
+        # Print the current contents of the URL queue every now and then
+        if url_queue.qsize() % 10 == 0:
+            print_queue()
+        
 
 # Run it!
 def main():
@@ -299,7 +305,7 @@ def main():
 
     # Rank word frequencies and export them to a CSV file
     ranked_words = word_counter.most_common()
-    with open('ranked_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
+    with open('vogue_ranked_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(['Word', 'Frequency'])
         csv_writer.writerows(ranked_words)
@@ -313,7 +319,7 @@ def main():
             aws_access_key_id=ACCESS_KEY,
             aws_secret_access_key=SECRET_KEY,
         )
-        s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
+        s3.upload_file('vogue_ranked_data.csv', 'gaineddata', 'vogue_ranked_data.csv')
         
         for filename in os.listdir('/Users/taliak/Documents/GitHub/LooksByData/articletext'):
             file_path = os.path.join('/Users/taliak/Documents/GitHub/LooksByData/articletext', filename)  

@@ -20,35 +20,9 @@ import boto3
 from dotenv import load_dotenv
 from urllib.parse import urljoin
 
-"""
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "",
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "sagemaker.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
-}
 
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Principal": {
-                "Service": "s3.amazonaws.com"
-            },
-            "Action": "sts:AssumeRole"
-        }
-    ]
-}
-"""
-
+# Visited URLs to avoid duplicates
+visited_urls = set()
 
 # Value to store URLs that have already been seen
 seen_urls = set() 
@@ -87,7 +61,7 @@ def get_html(url, retries=1, delay=5):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
         }
         response = requests.get(url, headers=headers)
-        if response.status_code == 200:
+        if response.status_code == 200 and url not in visited_urls:
             return response.content
         elif response.status_code in [503, 429]:
             logging.warning(f"Received {response.status_code} status code. Retrying after delay.")
@@ -103,41 +77,6 @@ def get_html(url, retries=1, delay=5):
     except Exception as e:
         logging.error(f"Error fetching HTML from {url}: {e}, moving onto next URL.")
         retries -= 1
-        return None
-    
-    
-# Function to crawl a page and find links to scrape
-def crawl_page(url, retries = 1, delay = 5):
-    global seen_urls
-    # IF NOT SCRAPING VOGUE
-    #if url.startswith('/'):
-        #url = f"https:/{url}"
-
-    # VOGUE ONLY CODE IS BELOW
-    # why? well....whenever you scrape vogue, you must append to their article links the domain name. 
-    if url.startswith("/"):
-        url = "https://www.vogue.com{url}"
-    html_content = get_html(url, retries=retries, delay=delay)
-    
-    # Continuing on...
-    if html_content:
-        soup = BeautifulSoup(html_content, "html.parser")
-        # Find all links on the page
-        links = [link.get('href') for link in soup.find_all('a', href=True)]
-        for link in links:
-            if re.match(r'^https?://', link) and ('page=' in link) and link not in seen_urls:  
-                url_queue.put((0, link))
-                seen_urls.add(link)
-            elif re.match(r'^/', link) and link not in seen_urls:  
-                full_url = urljoin(url, link)
-                url_queue.put((1, full_url))  
-                seen_urls.add(link)
-            elif re.match(r'^https?://', link) and any(keyword in link.lower() for keyword in keywords) and link not in seen_urls:
-                url_queue.put((2, link)) 
-                seen_urls.add(link)
-        logging.info(f"Crawled page: {url}")
-    else:
-        logging.error(f"Failed to crawl page: {url}")
         return None
     
 
@@ -163,8 +102,8 @@ def extract_article_content(url, output_dir):
 
 # Function to scrape article content from a page and its subpages
 def scrape_page(url, retries=1, delay=5):
-        time.sleep(random.uniform(5, 10))
         html_content = get_html(url, retries=retries, delay=delay)
+        visited_urls.add(url)
         if html_content:
             soup = BeautifulSoup(html_content, "html.parser")
             title_tags = soup.find_all(['h1', 'h2', 'h3', 'a'])
@@ -194,7 +133,7 @@ def scrape_page(url, retries=1, delay=5):
                 images = soup.find_all('img')
                 for idx, img in enumerate(images):
                     img_url = img.get('src')
-                    download_and_resize_image(img_url, f'{article_name}_{idx}')
+                    download_and_resize_image(img_url)
 
                 logging.info(f"Scraped page: {url}")
             else:
@@ -203,10 +142,26 @@ def scrape_page(url, retries=1, delay=5):
             # Find all links on the page and scrape subpages
             links = [link.get('href') for link in soup.find_all(['a'], {'href': True})]
             for link in links:
+                if link.startswith('http://www.condenast.com/'):
+                # Don't go down this rabbit hole
+                    return None
+                if link.startswith('http://login'):
+                    # Don't go down this rabbit hole
+                    return None
+        
+                if link.startswith('#'):
+                    return None
 
-                if not link.startswith('http'):
-                    link = urljoin(url, link)
-                    url_queue.put((1, link))
+                if link.startswith('www'):
+                    link = f"https://{link}"
+            
+                parsed_url = urlparse(url)
+                domain = parsed_url.netloc
+                if link.startswith('/'):
+                    link = urljoin(f"https://{domain}", link)
+
+
+                url_queue.put((1, link))
             logging.info(f"Scraped page: {url}")
 
 
@@ -217,9 +172,51 @@ def scrape_page(url, retries=1, delay=5):
             else:
                 logging.error(f"Failed to scrape page: {url}. Retry limit exceeded.")
                 return None
+            
+# Function to scrape article content from a page subpages
+def scrape_subpage(url, retries=1, delay=5):
+        html_content = get_html(url, retries=retries, delay=delay)
+        if html_content:
+            soup = BeautifulSoup(html_content, "html.parser")
+            images = soup.find_all('img')
+            # Extract text content from article to split into individual words
+            text = " ".join(tag.get_text() for tag in soup.find_all(['p', 'span', 'alt', 'title', 'h1', 'h2', 'h3']))
+            # Clean the text
+            cleaned_text = re.sub(r'[^\w\s]', '', text.lower())  # Remove punctuation and convert to lowercase
+            # Tokenize the text
+            words = cleaned_text.split()
+            words = [word for word in words if word not in common_words]
+            word_counter.update(words)
+            # Write article name and link to CSV to store URLS
+            with open('articles.csv', 'a', newline='') as csvfile:
+                csv_writer = csv.writer(csvfile)
+                csv_writer.writerow([url])
+
+            # Extract and save full article text for AI model training
+            output_dir = f'articletext'  
+            os.makedirs(output_dir, exist_ok=True)  
+            extract_article_content(url, output_dir)
+
+            # Extract and save images
+            images = soup.find_all('img')
+            for idx, img in enumerate(images):
+                img_url = img.get('src')
+                download_and_resize_image(img_url)
+
+            logging.info(f"Scraped page: {url}")
+
+        else:
+            if retries > 0:
+                logging.error(f"Failed to scrape page: {url}. Retrying...")
+                scrape_subpage(url, retries=retries - 1, delay=delay)
+            else:
+                logging.error(f"Failed to scrape page: {url}. Retry limit exceeded.")
+                return None
+            
 
 # Function to download and resize images, accounting for different format types
-def download_and_resize_image(img_url, filename):
+def download_and_resize_image(img_url):
+    global count
     try:
         if not img_url:
             logging.error("Empty image URL provided.")
@@ -251,12 +248,15 @@ def download_and_resize_image(img_url, filename):
             img = Image.open(BytesIO(response.content))
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
-                img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=100)
+                count += 1
+                img.save(f'articleimages/{count}.jpg', 'JPEG', quality=100)
             if img.mode == 'P':
                 img = img.convert('RGB')
-                img.save(f'articleimages/{filename}.webp', 'WEBP', quality=100) 
+                count += 1
+                img.save(f'articleimages/{count}.webp', 'WEBP', quality=100) 
             img = img.resize((256, 256))
-            img.save(f'articleimages/{filename}.jpg', 'JPEG', quality=95)
+            count += 1
+            img.save(f'articleimages/{count}.jpg', 'JPEG', quality=95)
         else:
             logging.error(f"Failed to download image from {img_url}. Status code: {response.status_code}")
     except Exception as e:
@@ -268,15 +268,18 @@ def download_and_resize_image(img_url, filename):
 def process_queue():
     while True:
         priority, url = url_queue.get()
+        time.sleep(90)
         if priority == 0:
-            time.sleep(60)
             scrape_page(url)
-        else:  # Low priority
-            crawl_page(url)
-            time.sleep(60)
-            url_queue.put((0, url))  # Re-add URL to queue with higher priority after it's been crawled to be scraped
-        url_queue.task_done()
-        time.sleep(random.uniform(3, 15))
+            url_queue.task_done()
+        if priority == 1:
+            scrape_subpage(url)
+            url_queue.task_done()
+        if url_queue.empty():
+            break
+        # Print the current contents of the URL queue every now and then
+        if url_queue.qsize() % 10 == 0:
+            print_queue()
 
 # Function to print the current contents of the URL queue
 def print_queue():
@@ -298,47 +301,23 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     # Start URLs for crawling
+    
     start_urls = [
             "https://www.asos.com/us/women/fashion-feed/?ctaref=ww|fashionandbeauty",
-            "https://www.aritzia.com/us/en/stories",
             "https://www.aritzia.com/us/en/favourites-1",
     	    "https://www.aritzia.com/us/en/new",
             "https://www.aritzia.com/en/clothing",
             "https://www.glamour.com/fashion",
             "https://www.cosmopolitan.com/style-beauty/fashion/",
             "https://www.elle.com/fashion/",
-            "https://blog.nastygal.com/style/page/2/",
-            "https://www.ssense.com/en-us/editorial/fashion",
             "https://www2.hm.com/en_us/women/seasonal-trending/trending-now.html",
     	    "https://www2.hm.com/en_us/women/deals/bestsellers.html",
-            "https://www.zara.com/us/en/woman-new-in-l1180.html?v1=2352540&regionGroupId=131",
-            "https://www.anthropologie.com/stories-style",
-            "https://www.madewell.com/Inspo.html",
-            "https://www.farfetch.com/style-guide/",
             "https://www.modaoperandi.com/editorial/what-we-are-wearing",
             "https://www.brownsfashion.com/woman/stories/fashion",
-            "https://www.saksfifthavenue.com/?orgin=%2Feditorial",
-            "https://www.saksfifthavenue.com/c/women-s-new-arrivals",
             "https://www.ssense.com/en-us/women?sort=popularity-desc",
-            "https://www.ssense.com/en-us/women",
             "https://www.abercrombie.com/shop/us/womens-new-arrivals",
             "https://shop.mango.com/us/women/featured/whats-new_d55927954?utm_source=c-producto-destacados&utm_medium=email&utm_content=woman&utm_campaign=E_WSWEOP24&sfmc_id=339434986&cjext=768854443022715810",
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/trend-edit.html",
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/tailored.html",
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/co-ords.html",				
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/craft.html",
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/linen.html",
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/warm-weather.html",
-    	    "https://www2.hm.com/en_us/women/seasonal-trending/city-chic.html",
             "https://www.whowhatwear.com/section/fashion"
-            "https://www.whowhatwear.com/section/style-tips",
-            "https://www.whowhatwear.com/section/celebrity-style",
-            "https://www.whowhatwear.com/section/outfit-ideas",
-            "https://www.whowhatwear.com/section/shopping",
-            "https://www.whowhatwear.com/section/trends",
-            "https://www.whowhatwear.com/section/wardrobe-essentials",
-            "https://www.nylon.com/fashion",
-            "https://www.nylon.com/style",
             "https://www.shopcider.com/collection/new?listSource=homepage%3Bcollection_new%3B1",
             "https://www.shopcider.com/product/list?collection_id=94&link_url=https%3A%2F%2Fwww.shopcider.com%2Fproduct%2Flist%3Fcollection_id%3D94&operationpage_title=homepage&operation_position=2&operation_type=category&operation_content=Bestsellers&operation_image=&operation_update_time=1712742203550&listSource=homepage%3Bcollection_94%3B2",
             "https://www.prettylittlething.us/new-in-us.html",
@@ -346,16 +325,17 @@ def main():
             "https://us.princesspolly.com/collections/new",
             "https://us.princesspolly.com/collections/best-sellers",
             "https://www.aloyoga.com/collections/new-arrivals",
-            "https://www.aeropostale.com/women-teen-girls/whats-new/new-arrivals/",
             "https://www.pullandbear.com/us/woman/new-arrivals-n6491"
         ]
 
-    # Add start URLs to the queue
+    # Add start URLs to the queue one at a time
     for url in start_urls:
         url_queue.put((0, url))
+        process_queue()
+
 
     # Create worker threads for efficiency
-    num_threads = 10
+    num_threads = 14
     for _ in range(num_threads):
         thread = threading.Thread(target=process_queue)
         thread.daemon = True
@@ -370,7 +350,7 @@ def main():
 
     # Rank word frequencies and export them to a CSV file
     ranked_words = word_counter.most_common()
-    with open('ranked_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
+    with open('consumer_ranked_data.csv', 'w', newline='', encoding='utf-8') as csvfile:
         csv_writer = csv.writer(csvfile)
         csv_writer.writerow(['Word', 'Frequency'])
         csv_writer.writerows(ranked_words)
@@ -384,8 +364,7 @@ def main():
             aws_access_key_id=ACCESS_KEY,
             aws_secret_access_key=SECRET_KEY,
         )
-        s3.upload_file('articles.csv', 'gaineddata', 'articles.csv')
-        s3.upload_file('ranked_data.csv', 'gaineddata', 'ranked_data.csv')
+        s3.upload_file('consumer_ranked_data.csv', 'gaineddata', 'ranked_data.csv')
         
         for filename in os.listdir('/Users/taliak/Documents/GitHub/LooksByData/articletext'):
             file_path = os.path.join('/Users/taliak/Documents/GitHub/LooksByData/articletext', filename)  
@@ -393,7 +372,7 @@ def main():
 
         for filename in os.listdir('/Users/taliak/Documents/GitHub/LooksByData/articleimages'):
             file_path = os.path.join('/Users/taliak/Documents/GitHub/LooksByData/articleimages', filename)
-            s3.upload_file(file_path, 'gaineddata/images/', filename)
+            s3.upload_file(file_path, 'gaineddata/images', filename)
 
 
         logging.info("Files have been uploaded to S3!")
@@ -408,3 +387,4 @@ if __name__ == "__main__":
 
 # Notes:
 # make sure to scrape on a jupyter server and not on a local machine for the AI part of this.
+# make sure to have the right permissions for the S3 bucket

@@ -3,7 +3,7 @@
 
 
 
-import instaloader
+#import instaloader
 from collections import Counter
 import csv
 import time

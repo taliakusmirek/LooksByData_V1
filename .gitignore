@@ -1,2 +1,8 @@
 
 .env
+articleimages
+articletext
+csv
+influencercrawler.py
+.venv
+.fortalia
